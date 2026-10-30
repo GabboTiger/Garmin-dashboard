@@ -413,13 +413,17 @@ def compute_nocturnal_physiology_and_debt(
         ]
         if epochs:
             # Risoluzione tipica epoca SpO2 Garmin nel sonno: 1 o 5 minuti (stimiamo dal passo mediano)
-            ts_list = [float(ep["epochTimestamp"]) for ep in epochs if ep.get("epochTimestamp") is not None]
-            step_min = 5.0
-            if len(ts_list) >= 2:
+            dt_list = [
+                dt
+                for ep in epochs
+                if (dt := _parse_iso_or_ms(ep.get("epochTimestamp"))) is not None
+            ]
+            step_min = 1.0
+            if len(dt_list) >= 2:
                 diffs = [
-                    (ts_list[i + 1] - ts_list[i]) / 60000.0
-                    for i in range(len(ts_list) - 1)
-                    if ts_list[i + 1] > ts_list[i]
+                    (dt_list[i + 1] - dt_list[i]).total_seconds() / 60.0
+                    for i in range(len(dt_list) - 1)
+                    if dt_list[i + 1] > dt_list[i]
                 ]
                 if diffs:
                     step_min = float(np.median(diffs))
@@ -476,3 +480,4 @@ def compute_nocturnal_physiology_and_debt(
         ],
         how_it_works=hw,
     )
+

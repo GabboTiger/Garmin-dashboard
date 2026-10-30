@@ -47,7 +47,7 @@
         Confronto dopo Sedute Dure (n={{ te.n_hard_sessions }}, TRIMP ≥ {{ te.hard_load_threshold_trimp }})
         vs Facili ({{ te.n_easy_sessions }}) e Riposo ({{ te.n_rest_days }})
       </span>
-      <button type="button" class="quality-pill" data-detail-json='{{ train_effect | tojson }}'>Come si calcola ▸</button>
+      <button type="button" class="quality-pill" data-detail-json="{{ train_effect | tojson | forceescape }}">Come si calcola ▸</button>
     </div>
 
     <div class="grid-12" style="margin-bottom: 0;">
@@ -111,3 +111,4 @@
   });
 </script>
 {% endblock %}
+

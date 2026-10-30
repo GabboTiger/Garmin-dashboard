@@ -1,14 +1,14 @@
 {# Macro riutilizzabili del Design System (Bevel / Apple Health style) #}
 
 {% macro render_score_ring(score_obj, area_color_var) %}
-  {% set val = score_obj.score if score_obj and score_obj.score is not none else (score_obj.provisional_score if score_obj else None) %}
+  {% set val = score_obj.get('score') if score_obj and score_obj.get('score') is not none else (score_obj.get('provisional_score') if score_obj else None) %}
   {% set pct = (val if val is not none else 0) %}
   {% set circumference = 339.29 %}
   {% set dash_offset = circumference - (circumference * pct / 100.0) %}
   <button
     type="button"
     class="card card-interactive col-4"
-    data-detail-json='{{ score_obj | tojson }}'
+    data-detail-json="{{ score_obj | tojson | forceescape }}"
     aria-label="Apri scomposizione e formula per {{ score_obj.name if score_obj else 'Punteggio' }}"
   >
     <div class="card-header" style="width: 100%;">
@@ -53,7 +53,7 @@
   <button
     type="button"
     class="card card-interactive {{ col_class }}"
-    {% if detail_obj %}data-detail-json='{{ detail_obj | tojson }}'{% endif %}
+    {% if detail_obj %}data-detail-json="{{ detail_obj | tojson | forceescape }}"{% endif %}
   >
     <div>
       <div class="card-header">
@@ -91,3 +91,4 @@
     </div>
   </button>
 {% endmacro %}
+

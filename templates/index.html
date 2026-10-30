@@ -49,7 +49,7 @@
         {% for act in activities %}
         <tr
           style="cursor: pointer;"
-          data-detail-json='{{ {"title": (act.name or act.type) ~ " (" ~ act.day ~ ")", "display_value": act.trimp.value if act.trimp.calculable else "—", "unit": "TRIMP", "subtitle": "Analisi intra e post-attività", "assumptions": (act.hrr.assumptions + act.drift.assumptions + act.trimp.assumptions), "how_it_works": act.hrr.how_it_works} | tojson }}'
+          data-detail-json="{{ {'title': (act.name or act.type) ~ ' (' ~ act.day ~ ')', 'display_value': act.trimp.value if act.trimp.calculable else '—', 'unit': 'TRIMP', 'subtitle': 'Analisi intra e post-attività', 'assumptions': (act.hrr.assumptions + act.drift.assumptions + act.trimp.assumptions), 'how_it_works': act.hrr.how_it_works} | tojson | forceescape }}"
         >
           <td>{{ act.day }}</td>
           <td><strong>{{ act.name or act.type }}</strong></td>

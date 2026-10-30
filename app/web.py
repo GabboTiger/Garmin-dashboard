@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 from typing import Any
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
@@ -69,12 +73,13 @@ def create_app(db_path: Path | str | None = None, demo_mode: bool | None = None)
     app.config["DB_PATH"] = resolved_db_path
     app.config["DEMO_MODE"] = resolved_demo
 
-    # Inizializza lo schema; se siamo in DEMO_MODE e il DB demo è vuoto, genera i 90 giorni sintetici
+    # Inizializza lo schema; se siamo in DEMO_MODE e il DB demo è vuoto (o privo di serie raw Step 2), genera i 90 giorni sintetici
     conn = db.connect(resolved_db_path)
     db.init_db(conn)
     if resolved_demo:
-        cur = conn.execute("SELECT COUNT(*) AS cnt FROM daily")
-        if cur.fetchone()["cnt"] == 0:
+        cnt_daily = conn.execute("SELECT COUNT(*) AS cnt FROM daily").fetchone()["cnt"]
+        cnt_raw = conn.execute("SELECT COUNT(*) AS cnt FROM raw_garmin").fetchone()["cnt"]
+        if cnt_daily == 0 or cnt_raw == 0:
             synthetic.seed_synthetic_db(conn, days=90, seed=42)
     conn.close()
 

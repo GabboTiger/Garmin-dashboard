@@ -574,11 +574,9 @@ button.quality-pill:hover {
 }
 
 .math-eq-line {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 5px;
-  line-height: 1.8;
+  display: block;
+  line-height: 2.0;
+  padding: 2px 0;
 }
 
 .math-frac {

@@ -195,6 +195,7 @@ def create_app(db_path: Path | str | None = None, demo_mode: bool | None = None)
     )
     app.config["DB_PATH"] = resolved_db_path
     app.config["DEMO_MODE"] = resolved_demo
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
     # Inizializza lo schema; se siamo in DEMO_MODE e il DB demo è vuoto (o privo di serie raw Step 2), genera i 90 giorni sintetici
     conn = db.connect(resolved_db_path)
@@ -436,7 +437,20 @@ def create_app(db_path: Path | str | None = None, demo_mode: bool | None = None)
             metrics=corr_metrics,
             lag_days=lag_days,
         )
-        completeness = analysis.compute_completeness(daily_rows, metrics=list(METRIC_META.keys() - {"training_load_daily"}))
+        raw_comp = analysis.compute_completeness(
+            daily_rows,
+            metrics=("hrv_night_ms", "rhr_bpm", "sleep_total_min", "stress_avg", "bb_max", "steps", "respiration_sleep_brpm", "spo2_sleep_avg_pct"),
+        )
+        completeness = [
+            {
+                "metric": m,
+                "present_days": info["present_days"],
+                "total_days": info["total_days"],
+                "missing_days": int(info["total_days"]) - int(info["present_days"]),
+                "completeness_pct": info["completeness_pct"],
+            }
+            for m, info in raw_comp.items()
+        ]
 
         # Estrae le serie giornaliere pulite per lo scatter plot interattivo (X_t vs Y_{t+lag})
         records_for_scatter: list[dict[str, Any]] = []

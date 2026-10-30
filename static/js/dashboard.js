@@ -57,6 +57,9 @@
     "\\neq": " ≠ ",
     "\\approx": " ≈ ",
     "\\mid": " | ",
+    "\\in": " ∈ ",
+    "\\{": "{",
+    "\\}": "}",
     "\\to": " → ",
     "\\rightarrow": " → ",
     "\\Delta": "Δ",
@@ -316,7 +319,7 @@
     const hw = payload.how_it_works || {};
     if (howTitleEl) howTitleEl.textContent = hw.title || "Come si calcola (formula, parametri e limiti)";
     if (howFormulaEl) {
-      const rawLatex = hw.formula_latex || r"z = \frac{x - m_{30}}{1.4826 \cdot \text{MAD}_{30}}";
+      const rawLatex = hw.formula_latex || "z = \\frac{x - m_{30}}{1.4826 \\cdot \\text{MAD}_{30}}";
       howFormulaEl.innerHTML = renderLatexToHtml(rawLatex);
     }
     if (howParamsEl) {

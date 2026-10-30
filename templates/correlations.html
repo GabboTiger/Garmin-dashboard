@@ -1,21 +1,77 @@
 {% extends "base.html" %}
 
-{% block title %}Correlazioni — Garmin Personal Dashboard{% endblock %}
+{% block title %}Correlazioni &amp; Qualità Dati — Garmin Personal Dashboard{% endblock %}
 
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4);">
+<div class="toolbar-row">
   <div>
     <h2 class="section-title" style="margin: 0;">Matrice di Correlazione di Spearman (Ritardo: {{ lag_days }} giorni)</h2>
-    <p style="font-size: var(--text-sm); color: var(--text-secondary);">{{ matrix.label }}</p>
+    <p style="font-size: var(--text-sm); color: var(--text-secondary);">
+      <strong>{{ matrix.label }}</strong> — Confronta ogni metrica al giorno <em>t</em> con le metriche al giorno <em>t + {{ lag_days }}</em>.
+    </p>
   </div>
-  <div style="display: flex; gap: var(--space-2);">
-    <a class="badge-mode" href="{{ url_for('page_correlations', lag=0) }}">Lag 0 giorni</a>
-    <a class="badge-mode" href="{{ url_for('page_correlations', lag=1) }}">Lag +1 giorno</a>
-    <a class="badge-mode" href="{{ url_for('page_correlations', lag=2) }}">Lag +2 giorni</a>
+  <div style="display: flex; gap: var(--space-2); align-items: center;">
+    <span class="card-label">Ritardo (Lag):</span>
+    <a class="btn-pill {% if lag_days == 0 %}active{% endif %}" href="{{ url_for('page_correlations', day=day, lag=0) }}">Lag 0 giorni (stesso giorno)</a>
+    <a class="btn-pill {% if lag_days == 1 %}active{% endif %}" href="{{ url_for('page_correlations', day=day, lag=1) }}">Lag +1 giorno (notte/giorno dopo)</a>
+    <a class="btn-pill {% if lag_days == 2 %}active{% endif %}" href="{{ url_for('page_correlations', day=day, lag=2) }}">Lag +2 giorni</a>
   </div>
 </div>
 
-<section class="card">
+<!-- 1. Heatmap di Spearman + Scatter Plot Esplorativo Interattivo -->
+<section class="grid-12">
+  <article class="card col-6">
+    <div class="card-header">
+      <div>
+        <span class="card-label" style="color: var(--color-sleep);">Mappa di Calore di Spearman ρ (Lag +{{ lag_days }}g)</span>
+        <div class="card-subtitle">Valori vicini a +1 (verde acqua) indicano concordanza di rango; vicini a -1 (arancio) discordanza</div>
+      </div>
+      <span class="quality-pill">[-1, +1]</span>
+    </div>
+    <div id="corr-heatmap-chart" class="chart-box-lg"></div>
+  </article>
+
+  <article class="card col-6">
+    <div class="card-header">
+      <div>
+        <span class="card-label" style="color: var(--color-recovery);">Grafico a Dispersione (Scatter Plot) X(t) → Y(t+{{ lag_days }})</span>
+        <div class="card-subtitle">Seleziona due metriche o clicca una riga della tabella sotto</div>
+      </div>
+      <div style="display: flex; gap: var(--space-1); align-items: center;">
+        <select id="corr-select-x" class="select-clean">
+          <option value="sleep_total_min" selected>X: Sonno Totale</option>
+          <option value="training_load_daily">X: Carico Giornaliero</option>
+          <option value="hrv_night_ms">X: HRV Notturna</option>
+          <option value="rhr_bpm">X: FC a Riposo</option>
+          <option value="stress_avg">X: Stress Medio</option>
+          <option value="bb_max">X: Body Battery Max</option>
+        </select>
+        <select id="corr-select-y" class="select-clean">
+          <option value="hrv_night_ms" selected>Y: HRV Notturna</option>
+          <option value="rhr_bpm">Y: FC a Riposo</option>
+          <option value="sleep_total_min">Y: Sonno Totale</option>
+          <option value="stress_avg">Y: Stress Medio</option>
+          <option value="bb_max">Y: Body Battery Max</option>
+          <option value="training_load_daily">Y: Carico Giornaliero</option>
+        </select>
+      </div>
+    </div>
+    <div id="corr-scatter-chart" class="chart-box-lg"></div>
+  </article>
+</section>
+
+<!-- Formula di Spearman -->
+<section class="card" style="margin-bottom: var(--space-6);">
+  <span class="card-label" style="color: var(--color-sleep);">Formula del Coefficiente di Correlazione per Ranghi di Spearman (ρ)</span>
+  <div class="formula-code js-render-latex" data-latex="\rho_s = \frac{\text{cov}(\text{rg}(X_t),\, \text{rg}(Y_{t + \tau}))}{\sigma_{\text{rg}(X)} \cdot \sigma_{\text{rg}(Y)}}, \quad \tau \in \{0, 1, 2\}\;\text{giorni}"></div>
+  <p class="card-subtitle">
+    Spearman valuta relazioni monotone sui ranghi (senza assumere linearità o normalità gaussiana). Richiede almeno n ≥ 10 coppie di giorni completi.
+  </p>
+</section>
+
+<!-- 2. Tabella completa delle correlazioni (cliccabile per aggiornare lo scatter plot) -->
+<h2 class="section-title">Dettaglio Coppie di Metriche (clicca una riga per visualizzare lo Scatter Plot)</h2>
+<section class="card" style="margin-bottom: var(--space-6);">
   <div class="table-wrap">
     <table class="table-clean">
       <thead>
@@ -24,15 +80,26 @@
           <th>Metrica Y (giorno t + {{ lag_days }})</th>
           <th>Spearman ρ</th>
           <th>Giorni usati (n)</th>
-          <th>Avvertenza</th>
+          <th>Avvertenza metodologica</th>
         </tr>
       </thead>
       <tbody>
         {% for c in matrix.cells if c.metric_x != c.metric_y %}
-        <tr>
-          <td><strong>{{ c.metric_x }}</strong></td>
-          <td><strong>{{ c.metric_y }}</strong></td>
-          <td>{{ c.rho if c.rho is not none else "non calcolabile" }}</td>
+        <tr
+          class="js-corr-row"
+          data-mx="{{ c.metric_x }}"
+          data-my="{{ c.metric_y }}"
+          style="cursor: pointer;"
+        >
+          <td><strong>{{ metric_meta[c.metric_x].label if c.metric_x in metric_meta else c.metric_x }}</strong></td>
+          <td><strong>{{ metric_meta[c.metric_y].label if c.metric_y in metric_meta else c.metric_y }}</strong></td>
+          <td>
+            {% if c.rho is not none %}
+              <strong>{{ c.rho }}</strong>
+            {% else %}
+              <span class="quality-pill">non calcolabile</span>
+            {% endif %}
+          </td>
           <td>n = {{ c.n_days }}</td>
           <td style="font-size: var(--text-xs); color: var(--text-secondary);">{{ c.label }}</td>
         </tr>
@@ -41,4 +108,126 @@
     </table>
   </div>
 </section>
+
+<!-- 3. Qualità e Completezza dei Dati per Metrica + Esportazione CSV -->
+<div class="toolbar-row">
+  <div>
+    <h2 class="section-title" style="margin: 0;">Completezza dei Dati per Metrica &amp; Esportazione CSV</h2>
+    <p style="font-size: var(--text-sm); color: var(--text-secondary);">
+      Percentuale di giorni con valore registrato (non NULL) sull'intero archivio di {{ total_days }} giorni.
+    </p>
+  </div>
+  <div style="display: flex; gap: var(--space-2);">
+    <a class="btn-pill" href="{{ url_for('export_daily_csv') }}">⬇ Scarica daily.csv</a>
+    <a class="btn-pill" href="{{ url_for('export_activities_csv') }}">⬇ Scarica activities.csv</a>
+  </div>
+</div>
+
+<section class="grid-12">
+  <article class="card col-6">
+    <div class="card-header">
+      <span class="card-label" style="color: var(--color-recovery);">Copertura Storica per Metrica (%)</span>
+      <span class="quality-pill">{{ total_days }} giorni totali</span>
+    </div>
+    <div id="completeness-chart" class="chart-box"></div>
+  </article>
+
+  <article class="card col-6">
+    <div class="table-wrap">
+      <table class="table-clean">
+        <thead>
+          <tr>
+            <th>Metrica</th>
+            <th>Giorni Presenti</th>
+            <th>Giorni Assenti (NULL)</th>
+            <th>Completezza</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in completeness %}
+          <tr>
+            <td><strong>{{ metric_meta[row.metric].label if row.metric in metric_meta else row.metric }}</strong></td>
+            <td>{{ row.present_days }} / {{ row.total_days }}</td>
+            <td>{{ row.missing_days }}</td>
+            <td style="min-width: 130px;">
+              <strong>{{ row.completeness_pct }}%</strong>
+              <div class="subscore-bar-track">
+                <div class="subscore-bar-fill" style="width: {{ row.completeness_pct }}%; background: var(--color-recovery);"></div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var matrixData = {{ matrix | tojson }};
+    var metricMeta = {{ metric_meta | tojson }};
+    var scatterRecords = {{ (scatter_records or []) | tojson }};
+    var lagDays = {{ lag_days }};
+    var completeness = {{ (completeness or []) | tojson }};
+
+    window.GarminDashboardUI.renderSpearmanHeatmap("corr-heatmap-chart", matrixData, metricMeta);
+
+    var selX = document.getElementById("corr-select-x");
+    var selY = document.getElementById("corr-select-y");
+
+    function updateScatter() {
+      var mx = selX ? selX.value : "sleep_total_min";
+      var my = selY ? selY.value : "hrv_night_ms";
+      window.GarminDashboardUI.renderCorrelationScatter(
+        "corr-scatter-chart",
+        scatterRecords,
+        mx,
+        my,
+        lagDays,
+        metricMeta
+      );
+    }
+
+    if (selX) selX.addEventListener("change", updateScatter);
+    if (selY) selY.addEventListener("change", updateScatter);
+    updateScatter();
+
+    document.querySelectorAll(".js-corr-row").forEach(function (tr) {
+      tr.addEventListener("click", function () {
+        var mx = tr.getAttribute("data-mx");
+        var my = tr.getAttribute("data-my");
+        if (selX && mx) selX.value = mx;
+        if (selY && my) selY.value = my;
+        updateScatter();
+      });
+    });
+
+    if (completeness.length > 0 && typeof Plotly !== "undefined") {
+      var labels = completeness.map(function (c) {
+        return (metricMeta[c.metric] && metricMeta[c.metric].label) || c.metric;
+      });
+      var pcts = completeness.map(function (c) { return c.completeness_pct; });
+      var layout = window.GarminDashboardUI.basePlotlyLayout("Completezza (%)");
+      layout.yaxis.range = [0, 105];
+      layout.showlegend = false;
+      Plotly.newPlot(
+        "completeness-chart",
+        [
+          {
+            x: labels,
+            y: pcts,
+            type: "bar",
+            marker: { color: "#0D9488" },
+            hovertemplate: "%{x}<br><b>%{y}%</b><extra></extra>"
+          }
+        ],
+        layout,
+        { displayModeBar: false, responsive: true }
+      );
+    }
+  });
+</script>
 {% endblock %}

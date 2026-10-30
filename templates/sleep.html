@@ -7,10 +7,13 @@
 <section class="grid-12">
   {{ render_score_ring(scores.sleep, '--color-sleep') }}
 
-  <!-- Ipnogramma a gradini -->
+  <!-- Grafico 1: Ipnogramma a gradini -->
   <article class="card col-8">
     <div class="card-header">
-      <span class="card-label" style="color: var(--color-sleep);">Ipnogramma a Gradini della Notte ({{ day }})</span>
+      <div>
+        <span class="card-label" style="color: var(--color-sleep);">Ipnogramma a Gradini della Notte ({{ day }})</span>
+        <div class="card-subtitle">Sequenza temporale degli stadi (Profondo, Leggero, REM, Veglia)</div>
+      </div>
       <span class="quality-pill">
         {% if sleep_arch and sleep_arch.calculable %}
           {{ sleep_arch.value.estimated_cycles or "—" }} cicli · Efficienza {{ sleep_arch.value.efficiency_pct }}%
@@ -28,7 +31,7 @@
 </section>
 
 <!-- Architettura del sonno (Fasi, Latenze, Risvegli, Cicli) -->
-<h2 class="section-title">Architettura del Sonno e Cicli</h2>
+<h2 class="section-title">Architettura del Sonno, Latenze e Cicli</h2>
 {% set arch_v = sleep_arch.value if sleep_arch and sleep_arch.calculable else {} %}
 <section class="grid-12">
   {{ render_metric_card("Efficienza Sonno", arch_v.get("efficiency_pct"), "%", None, sleep_arch, "--color-sleep", "col-3") }}
@@ -38,6 +41,43 @@
   {{ render_metric_card("Latenza 1° Profondo", arch_v.get("latency_to_deep_min"), "min", None, sleep_arch, "--color-sleep", "col-4") }}
   {{ render_metric_card("Latenza 1° REM", arch_v.get("latency_to_rem_min"), "min", None, sleep_arch, "--color-sleep", "col-4") }}
   {{ render_metric_card("Cicli NREM→REM", arch_v.get("estimated_cycles"), "cicli", None, sleep_arch, "--color-sleep", "col-4") }}
+</section>
+
+<!-- Grafici 2, 3 e 4: Fasi impilate 30g, Durata vs Fabbisogno 30g, Fisiologia notturna -->
+<h2 class="section-title">Andamento Fasi, Durata e Fisiologia Notturna (ultimi 30 giorni)</h2>
+<section class="grid-12">
+  <article class="card col-6">
+    <div class="card-header">
+      <div>
+        <span class="card-label" style="color: var(--color-sleep);">Ripartizione Fasi del Sonno (30 giorni)</span>
+        <div class="card-subtitle">Ore di sonno Profondo, REM, Leggero e Veglia per singola notte</div>
+      </div>
+      <span class="quality-pill">Ore (h)</span>
+    </div>
+    <div id="sleep-stages-30d" class="chart-box"></div>
+  </article>
+
+  <article class="card col-6">
+    <div class="card-header">
+      <div>
+        <span class="card-label" style="color: var(--color-sleep);">Durata Totale vs Fabbisogno (480 min) e Media 7g</span>
+        <div class="card-subtitle">Confronto con il fabbisogno personale configurato (8.0 h)</div>
+      </div>
+      <span class="quality-pill">Minuti</span>
+    </div>
+    <div id="sleep-trend-30d" class="chart-box"></div>
+  </article>
+
+  <article class="card col-12">
+    <div class="card-header">
+      <div>
+        <span class="card-label" style="color: var(--color-recovery);">Fisiologia Notturna: HRV Notturna (ms) e Respirazione nel Sonno (atti/min)</span>
+        <div class="card-subtitle">Evoluzione dei parametri autonomici e respiratori registrati durante il sonno</div>
+      </div>
+      <span class="quality-pill">Doppio asse</span>
+    </div>
+    <div id="sleep-phys-30d" class="chart-box"></div>
+  </article>
 </section>
 
 <!-- Regolarità (30g), Social Jetlag, SRI e Fisiologia Notturna / Debito -->
@@ -56,10 +96,21 @@
   {{ render_metric_card("Debito Sonno (14 giorni)", phys_v.get("sleep_debt_14d_hours"), "h", None, sleep_phys, "--color-sleep", "col-3") }}
 </section>
 
-<!-- Trend a 30 giorni della durata del sonno -->
-<h2 class="section-title">Andamento Durata del Sonno (ultimi 30 giorni)</h2>
-<section class="card">
-  <div id="sleep-trend-30d" class="chart-box"></div>
+<!-- Formule matematiche in chiaro -->
+<h2 class="section-title">Formule Matematiche — Architettura, Regolarità e Debito</h2>
+<section class="grid-12">
+  <article class="card col-4">
+    <span class="card-label" style="color: var(--color-sleep);">Efficienza e Percentuali Fasi</span>
+    <div class="formula-code js-render-latex" data-latex="{{ sleep_arch.how_it_works.formula_latex if sleep_arch else '' }}"></div>
+  </article>
+  <article class="card col-4">
+    <span class="card-label" style="color: var(--color-sleep);">Metà del Sonno e Social Jetlag</span>
+    <div class="formula-code js-render-latex" data-latex="{{ sleep_reg.how_it_works.formula_latex if sleep_reg else '' }}"></div>
+  </article>
+  <article class="card col-4">
+    <span class="card-label" style="color: var(--color-sleep);">Debito di Sonno e SpO2 Sotto Soglia</span>
+    <div class="formula-code js-render-latex" data-latex="{{ sleep_phys.how_it_works.formula_latex if sleep_phys else '' }}"></div>
+  </article>
 </section>
 {% endblock %}
 
@@ -71,15 +122,31 @@
       window.GarminDashboardUI.renderHypnogramChart("sleep-hypno-chart", hypnoIntervals);
     }
 
+    var history30 = {{ (history_30d or []) | tojson }};
+    window.GarminDashboardUI.renderSleepStagesStackedChart("sleep-stages-30d", history30);
+
     var sleepSeries = {{ (sleep_trend.value.series if sleep_trend and sleep_trend.calculable else []) | tojson }};
     window.GarminDashboardUI.renderTrendWithBandChart("sleep-trend-30d", sleepSeries, {
       valueKey: "value",
       overlayKey: "sma_7d",
       seriesName: "Sonno (min)",
       overlayName: "Media mobile 7g",
+      targetLine: 480,
+      targetLabel: "Fabbisogno (480m)",
       unit: "min",
       colorToken: "--color-sleep"
     });
+
+    window.GarminDashboardUI.renderDualMetricOverlayChart(
+      "sleep-phys-30d",
+      history30,
+      "hrv_night_ms",
+      "respiration_sleep_brpm",
+      {
+        hrv_night_ms: { label: "HRV Notturna", unit: "ms", color_var: "--color-recovery" },
+        respiration_sleep_brpm: { label: "Respirazione Notte", unit: "atti/m", color_var: "--color-sleep" }
+      }
+    );
   });
 </script>
 {% endblock %}

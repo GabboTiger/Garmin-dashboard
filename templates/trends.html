@@ -4,16 +4,65 @@
 {% block title %}Tendenze — Garmin Personal Dashboard{% endblock %}
 
 {% block content %}
-<h2 class="section-title">Tendenze Statistiche (Theil-Sen, Mann-Kendall, CUSUM e Anomalie z robusto)</h2>
+<div class="toolbar-row">
+  <div>
+    <h2 class="section-title" style="margin: 0;">Analisi delle Tendenze ({{ window_days }} giorni fino a {{ day }})</h2>
+    <p style="font-size: var(--text-sm); color: var(--text-secondary);">
+      Sovrapposizione di metriche, pendenza robusta di Theil-Sen, test di Mann-Kendall, punti di cambio CUSUM e ciclo settimanale.
+    </p>
+  </div>
+
+  <div style="display: flex; gap: var(--space-2); align-items: center;">
+    <span class="card-label">Finestra:</span>
+    <a class="btn-pill {% if window_days == 7 %}active{% endif %}" href="{{ url_for('page_trends', day=day, window=7, m1=m1, m2=m2) }}">7 giorni</a>
+    <a class="btn-pill {% if window_days == 30 %}active{% endif %}" href="{{ url_for('page_trends', day=day, window=30, m1=m1, m2=m2) }}">30 giorni</a>
+    <a class="btn-pill {% if window_days == 90 %}active{% endif %}" href="{{ url_for('page_trends', day=day, window=90, m1=m1, m2=m2) }}">90 giorni</a>
+  </div>
+</div>
+
+<!-- 1. Grafico di Sovrapposizione Interattiva di Due Metriche (Doppio Asse Y) -->
+<section class="card" style="margin-bottom: var(--space-6);">
+  <div class="card-header">
+    <div>
+      <span class="card-label">Sovrapposizione di Due Metriche (Doppio Asse Y — {{ window_days }} giorni)</span>
+      <div class="card-subtitle">Seleziona due metriche qualsiasi per confrontarne visivamente l'andamento nel tempo</div>
+    </div>
+    <div style="display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap;">
+      <label for="select-m1" class="card-label">Asse SX:</label>
+      <select id="select-m1" class="select-clean">
+        <option value="hrv_night_ms" {% if m1 == 'hrv_night_ms' %}selected{% endif %}>HRV Notturna (ms)</option>
+        <option value="rhr_bpm" {% if m1 == 'rhr_bpm' %}selected{% endif %}>FC a Riposo (bpm)</option>
+        <option value="sleep_total_min" {% if m1 == 'sleep_total_min' %}selected{% endif %}>Sonno Totale (min)</option>
+        <option value="stress_avg" {% if m1 == 'stress_avg' %}selected{% endif %}>Stress Medio (pt)</option>
+        <option value="bb_max" {% if m1 == 'bb_max' %}selected{% endif %}>Body Battery Max (pt)</option>
+        <option value="steps" {% if m1 == 'steps' %}selected{% endif %}>Passi Giornalieri</option>
+      </select>
+
+      <label for="select-m2" class="card-label">Asse DX:</label>
+      <select id="select-m2" class="select-clean">
+        <option value="rhr_bpm" {% if m2 == 'rhr_bpm' %}selected{% endif %}>FC a Riposo (bpm)</option>
+        <option value="hrv_night_ms" {% if m2 == 'hrv_night_ms' %}selected{% endif %}>HRV Notturna (ms)</option>
+        <option value="sleep_total_min" {% if m2 == 'sleep_total_min' %}selected{% endif %}>Sonno Totale (min)</option>
+        <option value="stress_avg" {% if m2 == 'stress_avg' %}selected{% endif %}>Stress Medio (pt)</option>
+        <option value="bb_max" {% if m2 == 'bb_max' %}selected{% endif %}>Body Battery Max (pt)</option>
+        <option value="steps" {% if m2 == 'steps' %}selected{% endif %}>Passi Giornalieri</option>
+      </select>
+    </div>
+  </div>
+  <div id="trends-overlay-chart" class="chart-box-lg"></div>
+</section>
+
+<!-- 2. Schede Pendenza Theil-Sen e Test Mann-Kendall -->
+<h2 class="section-title">Pendenza Robusta Theil-Sen e Test di Mann-Kendall ({{ window_days }} giorni)</h2>
 <section class="grid-12">
   {% for item in trend_items %}
     {% set t_obj = item.trend %}
     {% set tv = t_obj.value if t_obj and t_obj.calculable else {} %}
     {% set mk = tv.get("theil_sen_mann_kendall", {}) %}
     {{ render_metric_card(
-      item.label ~ " (Pendenza 7g)",
+      item.label ~ " (Pendenza/sett)",
       mk.get("slope_per_week"),
-      item.unit ~ "/sett",
+      item.unit ~ "/s",
       None,
       t_obj,
       item.color_var,
@@ -22,24 +71,128 @@
   {% endfor %}
 </section>
 
-<h2 class="section-title">Andamento HRV, Sonno e FC a Riposo (con Media Mobile)</h2>
+<!-- 3. Grafici Retta Theil-Sen, Punti di Cambio CUSUM e Anomalie (|z| > 2.5) -->
+<h2 class="section-title">Punti di Cambio (CUSUM), Retta Theil-Sen e Anomalie Robuste (|z| &gt; 2.5)</h2>
+<section class="grid-12">
+  <article class="card col-6">
+    <div class="card-header">
+      <div>
+        <span class="card-label" style="color: var(--color-recovery);">HRV Notturna — EWMA 7g, Theil-Sen, CUSUM &amp; Anomalie</span>
+        <div class="card-subtitle">Linee verticali tratteggiate = cambio di regime CUSUM · Cerchi arancio = anomalie</div>
+      </div>
+      <span class="quality-pill">ms</span>
+    </div>
+    <div id="trends-cusum-hrv" class="chart-box"></div>
+  </article>
+
+  <article class="card col-6">
+    <div class="card-header">
+      <div>
+        <span class="card-label" style="color: var(--color-sleep);">Sonno Totale — EWMA 7g, Theil-Sen, CUSUM &amp; Anomalie</span>
+        <div class="card-subtitle">Durata del sonno in minuti con trend robusto e rilevamento outlier</div>
+      </div>
+      <span class="quality-pill">min</span>
+    </div>
+    <div id="trends-cusum-sleep" class="chart-box"></div>
+  </article>
+</section>
+
+<!-- 4. Grafici Ciclo Settimanale (Lun -> Dom) -->
+<h2 class="section-title">Ciclo Settimanale (Profilo Medio Lunedì → Domenica)</h2>
+<section class="grid-12">
+  <article class="card col-4">
+    <div class="card-header">
+      <span class="card-label" style="color: var(--color-recovery);">HRV Media per Giorno della Settimana</span>
+      <span class="quality-pill">ms</span>
+    </div>
+    <div id="trends-weekly-hrv" class="chart-box"></div>
+  </article>
+
+  <article class="card col-4">
+    <div class="card-header">
+      <span class="card-label" style="color: var(--color-sleep);">Sonno Medio per Giorno della Settimana</span>
+      <span class="quality-pill">min</span>
+    </div>
+    <div id="trends-weekly-sleep" class="chart-box"></div>
+  </article>
+
+  <article class="card col-4">
+    <div class="card-header">
+      <span class="card-label" style="color: var(--color-strain);">Stress Medio per Giorno della Settimana</span>
+      <span class="quality-pill">pt</span>
+    </div>
+    <div id="trends-weekly-stress" class="chart-box"></div>
+  </article>
+</section>
+
+<!-- 5. Formule Matematiche in chiaro -->
+<h2 class="section-title">Formule Matematiche — Stimatore di Theil-Sen, CUSUM di Page e Z-Score Robusto</h2>
 <section class="card">
-  <div id="trends-main-chart" class="chart-box"></div>
+  <div class="formula-code js-render-latex" data-latex="{{ hrv_trend.how_it_works.formula_latex if hrv_trend else '' }}"></div>
+  <p class="card-subtitle" style="margin-top: var(--space-2);">
+    Lo stimatore di Theil-Sen calcola la mediana delle pendenze tra tutte le coppie di punti ed è immune fino al 29.3% di outlier;
+    la somma cumulativa bilaterale di Page (CUSUM) individua spostamenti persistenti della media superiori a mezza deviazione standard.
+  </p>
 </section>
 {% endblock %}
 
 {% block scripts %}
 <script>
   document.addEventListener("DOMContentLoaded", function () {
-    var hrvSeries = {{ (hrv_trend.value.series if hrv_trend and hrv_trend.calculable else []) | tojson }};
-    window.GarminDashboardUI.renderTrendWithBandChart("trends-main-chart", hrvSeries, {
-      valueKey: "value",
-      overlayKey: "ewma_7d",
-      seriesName: "HRV Notturna",
-      overlayName: "EWMA 7g",
-      unit: "ms",
-      colorToken: "--color-recovery"
-    });
+    var historyWin = {{ (history_win or []) | tojson }};
+    var metricMeta = {{ (metric_meta or {}) | tojson }};
+    var trendsByKey = {{ (trends_by_key or {}) | tojson }};
+
+    var sel1 = document.getElementById("select-m1");
+    var sel2 = document.getElementById("select-m2");
+
+    function updateOverlay() {
+      var k1 = sel1 ? sel1.value : "hrv_night_ms";
+      var k2 = sel2 ? sel2.value : "rhr_bpm";
+      window.GarminDashboardUI.renderDualMetricOverlayChart("trends-overlay-chart", historyWin, k1, k2, metricMeta);
+    }
+
+    if (sel1) sel1.addEventListener("change", updateOverlay);
+    if (sel2) sel2.addEventListener("change", updateOverlay);
+    updateOverlay();
+
+    window.GarminDashboardUI.renderCusumAnomaliesChart(
+      "trends-cusum-hrv",
+      trendsByKey.hrv_night_ms,
+      "HRV Notturna",
+      "ms",
+      "--color-recovery"
+    );
+
+    window.GarminDashboardUI.renderCusumAnomaliesChart(
+      "trends-cusum-sleep",
+      trendsByKey.sleep_total_min,
+      "Sonno Totale",
+      "min",
+      "--color-sleep"
+    );
+
+    window.GarminDashboardUI.renderWeeklyCycleChart(
+      "trends-weekly-hrv",
+      trendsByKey.hrv_night_ms,
+      "HRV Notturna",
+      "ms",
+      "--color-recovery"
+    );
+    window.GarminDashboardUI.renderWeeklyCycleChart(
+      "trends-weekly-sleep",
+      trendsByKey.sleep_total_min,
+      "Sonno Totale",
+      "min",
+      "--color-sleep"
+    );
+    window.GarminDashboardUI.renderWeeklyCycleChart(
+      "trends-weekly-stress",
+      trendsByKey.stress_avg,
+      "Stress Medio",
+      "pt",
+      "--color-strain"
+    );
   });
 </script>
 {% endblock %}

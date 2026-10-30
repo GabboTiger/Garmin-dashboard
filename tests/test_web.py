@@ -1,4 +1,4 @@
-"""Test di integrazione per le route Flask, i template e i casi reali di payload Garmin (Fase 4)."""
+"""Test di integrazione per le route Flask, i template, l'export CSV e i casi reali Garmin (Fasi 4 e 5)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from app.web import create_app
 
 
 def test_web_routes_and_json_detail_attributes(tmp_path: Path) -> None:
-    """Verifica che tutte le pagine della Fase 4 e la galleria Design System (/design)
+    """Verifica che tutte le pagine (Fasi 4 e 5), le finestre temporali, i lag e gli export CSV
     rispondano con HTTP 200 e producano attributi data-detail-json validi.
     """
     db_path = tmp_path / "test_web.db"
@@ -22,13 +22,29 @@ def test_web_routes_and_json_detail_attributes(tmp_path: Path) -> None:
     synthetic.seed_synthetic_db(conn, days=35, seed=42)
     # Inseriamo anche un giorno con dati completamente assenti per verificare lo stato 'missing_data'
     db.upsert_daily(conn, {"day": "2026-03-10"})
+    conn.commit()
     conn.close()
 
     app = create_app(db_path=db_path, demo_mode=True)
     app.config["TESTING"] = True
     client = app.test_client()
 
-    for route in ("/", "/sleep", "/recovery", "/activities", "/trends", "/correlations", "/design", "/api/status"):
+    routes = (
+        "/",
+        "/sleep",
+        "/recovery",
+        "/activities",
+        "/trends",
+        "/trends?window=7&m1=sleep_total_min&m2=hrv_night_ms",
+        "/trends?window=90",
+        "/correlations?lag=0",
+        "/correlations?lag=1",
+        "/correlations?lag=2",
+        "/design",
+        "/api/status",
+    )
+
+    for route in routes:
         resp = client.get(route)
         assert resp.status_code == 200, f"Route {route} ha restituito {resp.status_code}"
         if not route.startswith("/api"):
@@ -40,6 +56,18 @@ def test_web_routes_and_json_detail_attributes(tmp_path: Path) -> None:
     # Verifica esplicita del giorno con dati assenti (provisional_score = None)
     resp_missing = client.get("/?day=2026-03-10")
     assert resp_missing.status_code == 200
+
+    # Verifica esportazione CSV giornaliero (NULL preservato come stringa vuota, mai 0)
+    csv_daily = client.get("/export/daily.csv")
+    assert csv_daily.status_code == 200
+    assert "text/csv" in csv_daily.content_type
+    daily_text = csv_daily.get_data(as_text=True)
+    assert "2026-03-10,," in daily_text
+
+    # Verifica esportazione CSV attività
+    csv_acts = client.get("/export/activities.csv")
+    assert csv_acts.status_code == 200
+    assert "activity_id,day,start_local" in csv_acts.get_data(as_text=True)
 
 
 def test_spo2_iso_timestamp_from_real_garmin() -> None:

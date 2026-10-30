@@ -11,7 +11,44 @@
   {{ render_score_ring(scores.sleep, '--color-sleep') }}
 </section>
 
-<!-- 2. Metriche chiave con scostamento neutro dalla baseline a 30 giorni -->
+<!-- 2. Panoramica Grafica Giornaliera (3 Grafici: Storico Punteggi, HRV con Banda, Body Battery & Stress) -->
+<h2 class="section-title">Panoramica Grafica (ultimi 30 giorni fino a {{ day }})</h2>
+<section class="grid-12">
+  <article class="card col-12">
+    <div class="card-header">
+      <div>
+        <span class="card-label">Andamento dei 3 Punteggi (Recupero, Sonno e Sforzo — 30 giorni)</span>
+        <div class="card-subtitle">Confronto tra carico giornaliero (Sforzo), qualità del riposo (Sonno) e risposta autonomica (Recupero)</div>
+      </div>
+      <span class="quality-pill">Scala 0–100</span>
+    </div>
+    <div id="today-scores-chart" class="chart-box"></div>
+  </article>
+
+  <article class="card col-6">
+    <div class="card-header">
+      <div>
+        <span class="card-label" style="color: var(--color-recovery);">HRV Notturna e Banda di Norma (30 giorni)</span>
+        <div class="card-subtitle">Valore notturno (ms), media 7g e corridoio individuale 60g ± k·SD</div>
+      </div>
+      <span class="quality-pill">ms</span>
+    </div>
+    <div id="today-hrv-chart" class="chart-box"></div>
+  </article>
+
+  <article class="card col-6">
+    <div class="card-header">
+      <div>
+        <span class="card-label" style="color: var(--color-strain);">Body Battery (Min–Max) &amp; Stress Medio (30 giorni)</span>
+        <div class="card-subtitle">Escursione energetica giornaliera (fascia verde acqua) contro livello medio di stress</div>
+      </div>
+      <span class="quality-pill">0–100 pt</span>
+    </div>
+    <div id="today-bb-stress-chart" class="chart-box"></div>
+  </article>
+</section>
+
+<!-- 3. Metriche chiave con scostamento neutro dalla baseline a 30 giorni -->
 <h2 class="section-title">Metriche Chiave vs Baseline Personale (30 giorni)</h2>
 {% if latest %}
 <section class="grid-12" aria-label="Metriche chiave">
@@ -26,8 +63,28 @@
 </section>
 {% endif %}
 
-<!-- 3. Ultime attività registrate con HRR, Deriva, TRIMP ed Efficienza -->
-<h2 class="section-title">Ultime Attività e Analisi Algoritmiche</h2>
+<!-- 4. Sintesi trasparente delle Formule Matematiche dei 3 Punteggi -->
+<h2 class="section-title">Trasparenza Algoritmica — Formule dei Punteggi</h2>
+<section class="grid-12">
+  <article class="card col-4">
+    <span class="card-label" style="color: var(--color-recovery);">Formula Recupero (0–100)</span>
+    <div class="formula-code js-render-latex" data-latex="{{ scores.recovery.how_it_works.formula_latex if scores.recovery else '' }}"></div>
+    <p class="card-subtitle">Pesi: HRV 35% · FC riposo 25% · Sonno 25% · Body Battery/Stress 15%</p>
+  </article>
+  <article class="card col-4">
+    <span class="card-label" style="color: var(--color-strain);">Formula Sforzo (0–100)</span>
+    <div class="formula-code js-render-latex" data-latex="{{ scores.strain.how_it_works.formula_latex if scores.strain else '' }}"></div>
+    <p class="card-subtitle">Curva esponenziale saturante su TRIMP a zone FC (o Training Load) + movimento</p>
+  </article>
+  <article class="card col-4">
+    <span class="card-label" style="color: var(--color-sleep);">Formula Sonno (0–100)</span>
+    <div class="formula-code js-render-latex" data-latex="{{ scores.sleep.how_it_works.formula_latex if scores.sleep else '' }}"></div>
+    <p class="card-subtitle">Pesi: Durata vs fabbisogno 50% · Fasi Profondo+REM 25% · Regolarità 7g 25%</p>
+  </article>
+</section>
+
+<!-- 5. Ultime attività registrate con HRR, Deriva, TRIMP ed Efficienza -->
+<h2 class="section-title">Ultime Attività e Analisi Algoritmiche (clicca una riga per i dettagli)</h2>
 <section class="card">
   {% if activities %}
   <div class="table-wrap">
@@ -96,4 +153,29 @@
   <div class="state-box">Nessuna attività presente nell'archivio.</div>
   {% endif %}
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var history30 = {{ (history_30d or []) | tojson }};
+    var hrvSeries = {{ (hrv_band.value.series[-30:] if hrv_band and hrv_band.calculable else []) | tojson }};
+
+    window.GarminDashboardUI.renderScoresHistoryChart("today-scores-chart", history30);
+
+    window.GarminDashboardUI.renderTrendWithBandChart("today-hrv-chart", hrvSeries, {
+      valueKey: "hrv_ms",
+      overlayKey: "hrv_7d_ms",
+      bandLowKey: "ms_band_low",
+      bandHighKey: "ms_band_high",
+      seriesName: "HRV Notturna",
+      overlayName: "Media 7g",
+      bandLabel: "Banda 60g ±k·SD",
+      unit: "ms",
+      colorToken: "--color-recovery"
+    });
+
+    window.GarminDashboardUI.renderBodyBatteryStressChart("today-bb-stress-chart", history30);
+  });
+</script>
 {% endblock %}

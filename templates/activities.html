@@ -9,10 +9,13 @@
 
   <article class="card col-8">
     <div class="card-header">
-      <span class="card-label" style="color: var(--color-strain);">Carico Acuto (ATL 7g), Cronico (CTL 28g) e Bilancio (TSB)</span>
+      <div>
+        <span class="card-label" style="color: var(--color-strain);">Carico Acuto (ATL 7g), Cronico (CTL 28g) e Bilancio (TSB)</span>
+        <div class="card-subtitle">Modello esponenziale Fitness-Fatica di Banister sugli ultimi 60 giorni</div>
+      </div>
       {% if load_stats and load_stats.calculable %}
         <button type="button" class="quality-pill" data-detail-json="{{ load_stats | tojson | forceescape }}">
-          ACWR: {{ load_stats.value.acwr or "—" }} · Come si calcola ▸
+          ACWR: {{ load_stats.value.acwr or "—" }} · Formula e Dettagli ▸
         </button>
       {% endif %}
     </div>
@@ -37,6 +40,59 @@
   {{ render_metric_card("Tempo Zone 7g (Totale)", wz_val.get("total_zone_minutes"), "min", None, weekly_zones, "--color-strain", "col-4") }}
   {{ render_metric_card("Quota Bassa Intensità (Z1+Z2)", wz_val.get("low_intensity_z1_z2_pct"), "%", None, weekly_zones, "--color-strain", "col-4") }}
   {{ render_metric_card("Quota Alta Intensità (Z4+Z5)", wz_val.get("high_intensity_z4_z5_pct"), "%", None, weekly_zones, "--color-strain", "col-4") }}
+</section>
+
+<!-- Grafici 2, 3 e 4: Confronto Settimanale Carico/Volume, Distribuzione Zone 8 settimane, Efficienza -->
+<h2 class="section-title">Confronto Settimanale (ultime 8 settimane) ed Efficienza Aerobica</h2>
+<section class="grid-12">
+  <article class="card col-6">
+    <div class="card-header">
+      <div>
+        <span class="card-label" style="color: var(--color-strain);">Carico Settimanale (TRIMP) e Durata (minuti)</span>
+        <div class="card-subtitle">Confronto della settimana corrente con le 7 settimane precedenti</div>
+      </div>
+      <span class="quality-pill">8 settimane</span>
+    </div>
+    <div id="activities-weekly-load-chart" class="chart-box"></div>
+  </article>
+
+  <article class="card col-6">
+    <div class="card-header">
+      <div>
+        <span class="card-label" style="color: var(--color-strain);">Distribuzione Settimanale Tempo nelle 5 Zone FC (Z1–Z5)</span>
+        <div class="card-subtitle">Minuti trascorsi in ciascuna zona cardiaca per settimana</div>
+      </div>
+      <span class="quality-pill">Minuti / zona</span>
+    </div>
+    <div id="activities-weekly-zones-chart" class="chart-box"></div>
+  </article>
+
+  <article class="card col-12">
+    <div class="card-header">
+      <div>
+        <span class="card-label" style="color: var(--color-recovery);">Efficienza Velocità/FC (m/battito) e TRIMP per Singola Seduta</span>
+        <div class="card-subtitle">Progressione dell'economia di corsa/movimento a parità di frequenza cardiaca</div>
+      </div>
+      <span class="quality-pill">m / battito</span>
+    </div>
+    <div id="activities-efficiency-chart" class="chart-box"></div>
+  </article>
+</section>
+
+<!-- Formule matematiche delle analisi attività -->
+<h2 class="section-title">Formule Matematiche — TRIMP, Modello ATL/CTL/TSB, HRR e Deriva Cardiaca</h2>
+<section class="grid-12">
+  <article class="card col-6">
+    <span class="card-label" style="color: var(--color-strain);">Carico Acuto (ATL 7g), Cronico (CTL 28g), TSB e ACWR</span>
+    <div class="formula-code js-render-latex" data-latex="{{ load_stats.how_it_works.formula_latex if load_stats else '' }}"></div>
+  </article>
+  <article class="card col-6">
+    <span class="card-label" style="color: var(--color-strain);">TRIMP di Banister, HRR (60s/120s) e Deriva Cardiaca</span>
+    <div class="formula-code js-render-latex" data-latex="{{ activities[0].trimp.how_it_works.formula_latex if activities else '' }}"></div>
+    {% if activities %}
+      <div class="formula-code js-render-latex" data-latex="{{ activities[0].drift.how_it_works.formula_latex }}"></div>
+    {% endif %}
+  </article>
 </section>
 
 <!-- Elenco attività con analisi HRR, Deriva, TRIMP ed Efficienza -->
@@ -127,15 +183,70 @@
       Plotly.newPlot(
         "activities-load-chart",
         [
-          { x: x, y: atl, type: "scatter", mode: "lines", name: "Fatica (ATL 7g)", line: { color: "#FB923C", width: 2 } },
-          { x: x, y: ctl, type: "scatter", mode: "lines", name: "Fitness (CTL 28g)", line: { color: "#2DD4BF", width: 2 } },
-          { x: x, y: tsb, type: "bar", name: "Bilancio TSB", marker: { color: "rgba(161,161,170,0.3)" } }
+          { x: x, y: atl, type: "scatter", mode: "lines", name: "Fatica (ATL 7g)", line: { color: "#EA580C", width: 2.2 } },
+          { x: x, y: ctl, type: "scatter", mode: "lines", name: "Fitness (CTL 28g)", line: { color: "#0D9488", width: 2.2 } },
+          { x: x, y: tsb, type: "bar", name: "Bilancio TSB", marker: { color: "rgba(100,116,139,0.28)" } }
         ],
         layout,
+        { displayModeBar: false, responsive: true }
+      );
+    }
+
+    var weeklySummary = {{ (weekly_summary or []) | tojson }};
+    if (weeklySummary.length > 0 && typeof Plotly !== "undefined") {
+      var wx = weeklySummary.map(function (w) { return w.label; });
+      var wLoadLayout = window.GarminDashboardUI.basePlotlyLayout("Carico / Minuti");
+      wLoadLayout.barmode = "group";
+      Plotly.newPlot(
+        "activities-weekly-load-chart",
+        [
+          { x: wx, y: weeklySummary.map(function (w) { return w.trimp_load; }), type: "bar", name: "Carico (TRIMP)", marker: { color: "#EA580C" } },
+          { x: wx, y: weeklySummary.map(function (w) { return w.duration_min; }), type: "bar", name: "Durata (min)", marker: { color: "#0D9488" } }
+        ],
+        wLoadLayout,
+        { displayModeBar: false, responsive: true }
+      );
+
+      var wZoneLayout = window.GarminDashboardUI.basePlotlyLayout("Minuti");
+      wZoneLayout.barmode = "stack";
+      Plotly.newPlot(
+        "activities-weekly-zones-chart",
+        [
+          { x: wx, y: weeklySummary.map(function (w) { return w.z1_min; }), type: "bar", name: "Z1 Recupero", marker: { color: "#9CA3AF" } },
+          { x: wx, y: weeklySummary.map(function (w) { return w.z2_min; }), type: "bar", name: "Z2 Aerobica base", marker: { color: "#0D9488" } },
+          { x: wx, y: weeklySummary.map(function (w) { return w.z3_min; }), type: "bar", name: "Z3 Tempo", marker: { color: "#4F46E5" } },
+          { x: wx, y: weeklySummary.map(function (w) { return w.z4_min; }), type: "bar", name: "Z4 Soglia", marker: { color: "#F59E0B" } },
+          { x: wx, y: weeklySummary.map(function (w) { return w.z5_min; }), type: "bar", name: "Z5 VO2max", marker: { color: "#EA580C" } }
+        ],
+        wZoneLayout,
+        { displayModeBar: false, responsive: true }
+      );
+    }
+
+    var acts = {{ (activities or []) | tojson }};
+    var actsChron = acts.slice().reverse();
+    if (actsChron.length > 0 && typeof Plotly !== "undefined") {
+      var ax = actsChron.map(function (a) { return a.day + " (" + (a.name || a.type) + ")"; });
+      var effVals = actsChron.map(function (a) { return a.efficiency && a.efficiency.calculable ? a.efficiency.value : null; });
+      var trimpVals = actsChron.map(function (a) { return a.trimp && a.trimp.calculable ? a.trimp.value : null; });
+      var effLayout = window.GarminDashboardUI.basePlotlyLayout("Efficienza (m/b)");
+      effLayout.margin.r = 48;
+      effLayout.yaxis2 = {
+        title: { text: "TRIMP", font: { size: 11, color: "#EA580C" } },
+        overlaying: "y",
+        side: "right",
+        showgrid: false
+      };
+      Plotly.newPlot(
+        "activities-efficiency-chart",
+        [
+          { x: ax, y: effVals, type: "scatter", mode: "lines+markers", name: "Efficienza (m/battito)", line: { color: "#0D9488", width: 2.2 }, marker: { size: 6 } },
+          { x: ax, y: trimpVals, yaxis: "y2", type: "bar", name: "TRIMP seduta", marker: { color: "rgba(234,88,12,0.35)" } }
+        ],
+        effLayout,
         { displayModeBar: false, responsive: true }
       );
     }
   });
 </script>
 {% endblock %}
-

@@ -295,6 +295,8 @@
     const titleEl = document.getElementById("drawer-title");
     const valueEl = document.getElementById("drawer-value");
     const statusEl = document.getElementById("drawer-status");
+    const expSecEl = document.getElementById("drawer-explanation-section");
+    const expTextEl = document.getElementById("drawer-explanation-text");
     const kpiSecEl = document.getElementById("drawer-kpi-section");
     const kpiGridEl = document.getElementById("drawer-kpi-grid");
     const zonesSecEl = document.getElementById("drawer-zones-section");
@@ -337,6 +339,18 @@
         statusEl.textContent = "Qualità: " + payload.quality_flag + " (n=" + (payload.n_samples || 0) + ")";
       } else {
         statusEl.textContent = "Analisi deterministica";
+      }
+    }
+
+    // 1B. Spiegazione del significato in italiano semplice
+    const expStr = payload.explanation || (triggerEl ? triggerEl.getAttribute("data-explanation") : "");
+    if (expSecEl && expTextEl) {
+      if (expStr && expStr.trim() !== "") {
+        expSecEl.style.display = "block";
+        expTextEl.textContent = expStr;
+      } else {
+        expSecEl.style.display = "none";
+        expTextEl.textContent = "";
       }
     }
 

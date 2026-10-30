@@ -5,14 +5,18 @@
   {% set pct = (val if val is not none else 0) %}
   {% set circumference = 339.29 %}
   {% set dash_offset = circumference - (circumference * pct / 100.0) %}
+  {% set score_name = score_obj.name if score_obj else '' %}
+  {% set exp = get_metric_explanation(score_name) if get_metric_explanation is defined else {'short': '', 'meaning': ''} %}
   <button
     type="button"
     class="card card-interactive col-4"
+    data-card-label="{{ score_name }}"
+    data-explanation="{{ exp.meaning | forceescape }}"
     data-detail-json="{{ score_obj | tojson | forceescape }}"
-    aria-label="Apri scomposizione e formula per {{ score_obj.name if score_obj else 'Punteggio' }}"
+    aria-label="Apri scomposizione e formula per {{ score_name or 'Punteggio' }}"
   >
     <div class="card-header" style="width: 100%;">
-      <span class="card-label" style="color: var({{ area_color_var }});">{{ score_obj.name if score_obj else "—" }}</span>
+      <span class="card-label" style="color: var({{ area_color_var }});">{{ score_name if score_name else "—" }}</span>
       <span class="quality-pill">{{ score_obj.status_label if score_obj else "dato assente" }}</span>
     </div>
 
@@ -41,8 +45,11 @@
           <span class="ring-sub">/ 100</span>
         </div>
       </div>
+      {% if exp.short %}
+        <div class="card-meaning-hint" style="text-align: center;">{{ exp.short }}</div>
+      {% endif %}
       <div style="font-size: var(--text-xs); color: var(--text-secondary);">
-        Clicca per scomposizione, pesi e formula ▸
+        Clicca per significato, pesi e formula ▸
       </div>
     </div>
   </button>
@@ -50,12 +57,14 @@
 
 
 {% macro render_metric_card(label, value, unit, baseline_obj=None, detail_obj=None, area_color_var=None, col_class="col-3") %}
+  {% set exp = get_metric_explanation(label) if get_metric_explanation is defined else {'short': '', 'meaning': ''} %}
   <button
     type="button"
     class="card card-interactive {{ col_class }}"
     data-card-label="{{ label }}"
     data-card-value="{{ value if value is not none else '' }}"
     data-card-unit="{{ unit }}"
+    data-explanation="{{ exp.meaning | forceescape }}"
     {% if baseline_obj %}data-baseline-json="{{ baseline_obj | tojson | forceescape }}"{% endif %}
     data-detail-json="{{ (detail_obj or {}) | tojson | forceescape }}"
   >
@@ -76,6 +85,10 @@
           <span style="font-size: var(--text-lg); color: var(--text-muted); font-weight: 600;">Dato assente</span>
         {% endif %}
       </div>
+
+      {% if exp.short %}
+        <div class="card-meaning-hint">{{ exp.short }}</div>
+      {% endif %}
     </div>
 
     <div class="baseline-delta" style="width: 100%; justify-content: space-between;">
@@ -95,7 +108,7 @@
           <span class="baseline-arrow" aria-hidden="true">!</span>
           <span>Non calcolabile</span>
         {% else %}
-          <span style="color: var(--text-muted); font-size: var(--text-xs);">Tocca per analisi e formula</span>
+          <span style="color: var(--text-muted); font-size: var(--text-xs);">Tocca per significato e formula</span>
         {% endif %}
       </div>
       <span style="color: var(--text-muted); font-size: var(--text-xs); font-weight: 600;">▸</span>

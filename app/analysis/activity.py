@@ -168,6 +168,50 @@ def compute_heart_rate_recovery(
     post_duration_s = total_end - t_end
 
     if post_duration_s < 55.0:
+        # Se lo stop finale è avvenuto prima di 60 s ma si tratta di una seduta intermittente
+        # (es. Tennis, ripetute) con pause di recupero interne (velocità media < 0.8 m/s per 45 s
+        # dopo picchi cardiaci significativi), stimiamo l'HRR mediano intra-seduta.
+        mean_hr_all = float(np.mean([s["hr"] for s in samples]))
+        peak_threshold = max(135.0, mean_hr_all + 8.0)
+        intra_60: list[float] = []
+        intra_120: list[float] = []
+        intra_peaks: list[float] = []
+
+        for idx_s, s_pt in enumerate(samples):
+            if s_pt["hr"] >= peak_threshold and s_pt["speed_mps"] > 0.35:
+                t0 = s_pt["elapsed_s"]
+                window_45 = [x for x in samples[idx_s + 1 :] if 0.0 < (x["elapsed_s"] - t0) <= 45.0]
+                if len(window_45) >= 3 and (sum(x["speed_mps"] for x in window_45) / len(window_45)) < 0.80:
+                    c60 = [x for x in samples[idx_s + 1 :] if abs((x["elapsed_s"] - t0) - 60.0) <= max(12.0, median_step_s * 1.5)]
+                    if c60:
+                        b60 = min(c60, key=lambda x: abs((x["elapsed_s"] - t0) - 60.0))
+                        drop60 = s_pt["hr"] - b60["hr"]
+                        if drop60 > 4.0:
+                            intra_60.append(drop60)
+                            intra_peaks.append(s_pt["hr"])
+                    c120 = [x for x in samples[idx_s + 1 :] if abs((x["elapsed_s"] - t0) - 120.0) <= max(15.0, median_step_s * 1.5)]
+                    if c120:
+                        b120 = min(c120, key=lambda x: abs((x["elapsed_s"] - t0) - 120.0))
+                        drop120 = s_pt["hr"] - b120["hr"]
+                        if drop120 > 4.0:
+                            intra_120.append(drop120)
+
+        if len(intra_60) >= 3:
+            hrr60_intra = round(float(np.percentile(intra_60, 75)), 1)
+            hrr120_intra = round(float(np.percentile(intra_120, 75)), 1) if len(intra_120) >= 3 else None
+            peak_ref = round(float(np.median(intra_peaks)), 1)
+            return make_result(
+                value={"hrr_60_bpm": hrr60_intra, "hrr_120_bpm": hrr120_intra, "hr_end_bpm": peak_ref},
+                unit="bpm",
+                n_samples=len(intra_60),
+                quality_flag="intra_session",
+                assumptions=[
+                    f"Registrazione fermata a +{post_duration_s:.0f} s dallo stop finale (< 60 s): HRR calcolato sulle {len(intra_60)} pause di recupero interne alla seduta (75° percentile dopo picchi >= {peak_threshold:.0f} bpm).",
+                    f"Risoluzione serie temporale: 1 campione ogni {median_step_s:.1f} s.",
+                ],
+                how_it_works=hw,
+            )
+
         return make_not_calculable(
             unit="bpm",
             reason=(
@@ -604,14 +648,6 @@ def compute_cardiac_drift(
     mean_speed = float(np.mean(speeds))
     speed_cv = float(np.std(speeds, ddof=1) / mean_speed) if mean_speed > 0 else 1.0
 
-    if speed_cv > config.cardiac_drift_max_speed_cv:
-        return make_not_calculable(
-            unit="%",
-            reason=f"Andatura non costante (CV velocità = {speed_cv * 100:.1f}% > {config.cardiac_drift_max_speed_cv * 100:.0f}%, es. ripetute o variazioni).",
-            n_samples=len(steady),
-            how_it_works=hw,
-        )
-
     mid_idx = len(steady) // 2
     half1 = steady[:mid_idx]
     half2 = steady[mid_idx:]
@@ -626,6 +662,15 @@ def compute_cardiac_drift(
     ef2 = (v2 * 60.0) / hr2
     decoupling_pct = round((1.0 - (ef2 / ef1)) * 100.0, 2)
 
+    is_variable_pace = speed_cv > config.cardiac_drift_max_speed_cv
+    q_flag = "variable_pace" if is_variable_pace else "good"
+    assumption_note = (
+        f"Andatura variabile/intermittente (CV velocità {speed_cv * 100:.1f}% > {config.cardiac_drift_max_speed_cv * 100:.0f}%): "
+        f"indica la variazione di FC media tra 2ª metà ({hr2:.1f} bpm) e 1ª metà ({hr1:.1f} bpm), non la deriva a passo fisso."
+        if is_variable_pace
+        else f"Tratto costante analizzato da {w_start / 60.0:.1f} a {w_end / 60.0:.1f} min (CV velocità {speed_cv * 100:.1f}%)."
+    )
+
     return make_result(
         value={
             "hr_drift_pct": drift_pct,
@@ -636,10 +681,8 @@ def compute_cardiac_drift(
         },
         unit="%",
         n_samples=len(steady),
-        quality_flag="good",
-        assumptions=[
-            f"Tratto costante analizzato da {w_start / 60.0:.1f} a {w_end / 60.0:.1f} min (CV velocità {speed_cv * 100:.1f}%)."
-        ],
+        quality_flag=q_flag,
+        assumptions=[assumption_note],
         how_it_works=hw,
     )
 

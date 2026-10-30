@@ -1,107 +1,101 @@
 {% extends "base.html" %}
 {% from "_macros.html" import render_score_ring, render_metric_card %}
 
-{% block title %}Design System & Galleria Componenti — Garmin Dashboard{% endblock %}
+{% block title %}Guida alle Metriche Tecniche — Garmin Personal Dashboard{% endblock %}
 
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4);">
-  <h2 class="section-title" style="margin: 0;">Galleria del Design System (Fase 1b)</h2>
-  <div style="display: flex; gap: var(--space-2);">
-    <a class="badge-mode" href="{{ url_for('page_design', theme='dark') }}">Tema Scuro</a>
-    <a class="badge-mode" href="{{ url_for('page_design', theme='light') }}">Tema Chiaro</a>
+<article class="card" style="margin-bottom: var(--space-5); border-color: rgba(45, 212, 191, 0.3);">
+  <div class="card-header">
+    <div>
+      <span class="card-label" style="color: var(--color-recovery);">Manuale di Lettura della Dashboard</span>
+      <h2 style="margin: 4px 0 6px; font-size: var(--text-xl);">📖 Guida e Glossario delle Metriche Fisiologiche e Statistiche</h2>
+      <div class="card-subtitle">
+        Ogni rettangolo della dashboard mostra già una spiegazione sintetica; cliccando su qualsiasi rettangolo si apre inoltre il pannello laterale con il significato completo, i sottovalori e la formula matematica. Qui trovi il dizionario completo di tutte le sigle tecniche.
+      </div>
+    </div>
   </div>
-</div>
+</article>
 
-<!-- 1. Tre anelli di punteggio SVG -->
-<h3 class="section-title">1. Anelli di Punteggio SVG (cliccabili → Pannello a 3 strati)</h3>
-<section class="grid-12">
-  {{ render_score_ring(scores.recovery, '--color-recovery') }}
-  {{ render_score_ring(scores.strain, '--color-strain') }}
-  {{ render_score_ring(scores.sleep, '--color-sleep') }}
-</section>
+{% set areas = [
+  ("Recupero & Sistema Nervoso", "--color-recovery", "Metriche che misurano il sistema nervoso autonomo (parasimpatico/vagale vs simpatico) e la prontezza giornaliera."),
+  ("Attività & Carico", "--color-strain", "Metriche che quantificano il costo cardiovascolare degli allenamenti, il bilancio Fitness-Fatica e l'economia del movimento."),
+  ("Sonno & Architettura", "--color-sleep", "Metriche sull'efficienza del riposo, le fasi cerebrali (Profondo N3, REM), il ritmo circadiano e la fisiologia notturna."),
+  ("Statistica & Trend", "--color-recovery", "Metodi matematici robusti usati per confrontare ogni dato con la tua norma personale senza falsi positivi.")
+] %}
 
-<!-- 2. Schede numero con scostamento neutro (▲▼•) dalla baseline -->
-<h3 class="section-title">2. Schede Numero e Variazione rispetto alla Baseline (mai verde/rosso)</h3>
-<section class="grid-12">
-  {{ render_metric_card("HRV Notturna", latest.hrv_night_ms, "ms", baselines.hrv_night_ms, scores.recovery, "--color-recovery", "col-4") }}
-  {{ render_metric_card("FC a Riposo", latest.rhr_bpm|int if latest.rhr_bpm else None, "bpm", baselines.rhr_bpm, scores.recovery, "--color-recovery", "col-4") }}
-  {{ render_metric_card("Sonno Totale", (latest.sleep_total_min / 60)|round(1) if latest.sleep_total_min else None, "h", baselines.sleep_total_min, scores.sleep, "--color-sleep", "col-4") }}
-</section>
+{% for area_name, color_var, area_desc in areas %}
+  <h2 class="section-title" style="color: var({{ color_var }}); margin-top: var(--space-6);">{{ area_name }}</h2>
+  <p style="margin: -8px 0 var(--space-4); font-size: var(--text-xs); color: var(--text-secondary);">{{ area_desc }}</p>
+  <section class="grid-12">
+    {% for metric_title, info in metric_guide.items() if info.area == area_name %}
+      <article class="card col-6" style="justify-content: flex-start; gap: var(--space-2);">
+        <div class="card-header" style="margin-bottom: 0;">
+          <strong style="font-size: var(--text-md); color: var({{ color_var }});">{{ metric_title }}</strong>
+          <span class="quality-pill">{{ info.area.split('&')[0]|trim }}</span>
+        </div>
+        <div class="card-meaning-hint" style="margin: 0; border-left-color: var({{ color_var }});">
+          <strong>In breve:</strong> {{ info.short }}
+        </div>
+        <p style="margin: 4px 0 0; font-size: var(--text-xs); color: var(--text-secondary); line-height: 1.55;">
+          {{ info.meaning }}
+        </p>
+      </article>
+    {% endfor %}
+  </section>
+{% endfor %}
 
-<!-- 3. Scheda andamento con banda di baseline e Ipnogramma a gradini -->
-<h3 class="section-title">3. Grafico Andamento con Banda di Baseline e Ipnogramma a Gradini</h3>
-<section class="grid-12">
-  <article class="card col-6">
-    <div class="card-header">
-      <span class="card-label" style="color: var(--color-recovery);">Banda HRV (ln rMSSD 7g vs 60g ± k·SD)</span>
-      <span class="quality-pill">n={{ hrv_band.n_samples }}</span>
-    </div>
-    <div id="design-hrv-chart" class="chart-box"></div>
-  </article>
-
-  <article class="card col-6">
-    <div class="card-header">
-      <span class="card-label" style="color: var(--color-sleep);">Ipnogramma a Gradini (Veglia, REM, Leggero, Profondo)</span>
-      <span class="quality-pill">{{ sleep_arch.value.estimated_cycles if sleep_arch.calculable else "—" }} cicli</span>
-    </div>
-    <div id="design-hypno-chart" class="chart-box"></div>
-  </article>
-</section>
-
-<!-- 4. Stati vuoti e speciali -->
-<h3 class="section-title">4. Stati Vuoti e Speciali</h3>
-<section class="grid-12">
-  <article class="card col-3">
-    <div class="card-label">Stato: Dato Assente</div>
-    <div class="state-box" style="margin-top: var(--space-3);">
-      <strong>Dato assente</strong> — L'orologio non è stato indossato durante la notte selezionata (valore <code>NULL</code>, mai mostrato come 0).
-    </div>
-  </article>
-
-  <article class="card col-3">
-    <div class="card-label">Stato: Calibrazione in Corso</div>
-    <div class="state-box" style="margin-top: var(--space-3);">
-      <strong>Calibrazione in corso (9/14 giorni)</strong> — Servono almeno 14 giorni validi negli ultimi 30 per calcolare la mediana e il MAD.
-    </div>
-  </article>
-
-  <article class="card col-3">
-    <div class="card-label">Stato: Caricamento (Scheletro)</div>
-    <div style="margin-top: var(--space-3);">
-      <div class="skeleton-line" style="width: 65%;"></div>
-      <div class="skeleton-line" style="width: 90%;"></div>
-      <div class="skeleton-line" style="width: 45%;"></div>
-    </div>
-  </article>
-
-  <article class="card col-3">
-    <div class="card-label">Stato: Non Calcolabile / Sync</div>
-    <div class="state-box" style="margin-top: var(--space-3);">
-      <strong>Non calcolabile</strong> — Risoluzione post-attività insufficiente (registrazione interrotta subito a fine sforzo).
-    </div>
-  </article>
+<!-- Tabella riassuntiva delle 5 Zone Cardiache e Soglie chiave -->
+<h2 class="section-title" style="margin-top: var(--space-6);">Riferimento Rapido — Le 5 Zone di Frequenza Cardiaca (Z1–Z5) e Soglie Tecniche</h2>
+<section class="card">
+  <div class="table-wrap">
+    <table class="table-clean">
+      <thead>
+        <tr>
+          <th>Zona / Parametro</th>
+          <th>% FC Massima</th>
+          <th>Sistema Energetico</th>
+          <th>Effetto Fisiologico Principale</th>
+          <th>Quando usarla / Come leggerla</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong style="color: #9CA3AF;">Z1 — Recupero Attivo</strong></td>
+          <td>50% – 60% FCmax</td>
+          <td>Aerobico lipidico leggero</td>
+          <td>Circolazione periferica e smaltimento cataboliti senza stress</td>
+          <td>Riscaldamento, defaticamento, camminata, pause tra le serie in palestra</td>
+        </tr>
+        <tr>
+          <td><strong style="color: #2DD4BF;">Z2 — Base Aerobica</strong></td>
+          <td>60% – 70% FCmax</td>
+          <td>Ossidazione grassi / mitocondri</td>
+          <td>Aumenta densità capillare, mitocondri ed efficienza cardiaca (gettata)</td>
+          <td>Corsa lenta costante (conversazione facile), palleggio leggero</td>
+        </tr>
+        <tr>
+          <td><strong style="color: #818CF8;">Z3 — Ritmo / Tempo</strong></td>
+          <td>70% – 80% FCmax</td>
+          <td>Misto aerobico (glicogeno + lipidi)</td>
+          <td>Allena la tenuta al ritmo medio e la capacità aerobica sostenuta</td>
+          <td>Corsa media, scambi prolungati nel Tennis</td>
+        </tr>
+        <tr>
+          <td><strong style="color: #F59E0B;">Z4 — Soglia Anaerobica</strong></td>
+          <td>80% – 90% FCmax</td>
+          <td>Glicolitico / Soglia lattacida</td>
+          <td>Innalza la velocità sostenibile prima dell'accumulo rapido di lattato</td>
+          <td>Corsa veloce / ripetute lunghe, punti intensi a tutto campo nel Tennis</td>
+        </tr>
+        <tr>
+          <td><strong style="color: #FB923C;">Z5 — VO2max / Massimale</strong></td>
+          <td>90% – 100% FCmax</td>
+          <td>Potenza aerobica max &amp; anaerobico</td>
+          <td>Stimola il massimo consumo d'ossigeno e la gittata cardiaca di picco</td>
+          <td>Sprint, scatti sotto rete, finali di gara (richiede 48h di recupero)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </section>
 {% endblock %}
-
-{% block scripts %}
-<script>
-  document.addEventListener("DOMContentLoaded", function () {
-    var hrvSeries = {{ (hrv_band.value.series[-30:] if hrv_band and hrv_band.calculable else []) | tojson }};
-    window.GarminDashboardUI.renderTrendWithBandChart("design-hrv-chart", hrvSeries, {
-      valueKey: "hrv_ms",
-      overlayKey: "hrv_7d_ms",
-      bandLowKey: "ms_band_low",
-      bandHighKey: "ms_band_high",
-      seriesName: "HRV Notte",
-      overlayName: "Media 7g",
-      bandLabel: "Banda 60g ±0.75 SD",
-      unit: "ms",
-      colorToken: "--color-recovery"
-    });
-
-    var hypnoIntervals = {{ (sleep_arch.value.hypnogram if sleep_arch and sleep_arch.calculable else []) | tojson }};
-    window.GarminDashboardUI.renderHypnogramChart("design-hypno-chart", hypnoIntervals);
-  });
-</script>
-{% endblock %}
-

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Garmin Personal Dashboard{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css', v='5') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css', v='6') }}">
   <script src="{{ url_for('static', filename='vendor/plotly.min.js') }}"></script>
 </head>
 <body>
@@ -97,7 +97,7 @@
         <a class="nav-link {% if active_page == 'activities' %}active{% endif %}" href="{{ url_for('page_activities', day=day) }}">Attività</a>
         <a class="nav-link {% if active_page == 'trends' %}active{% endif %}" href="{{ url_for('page_trends', day=day) }}">Tendenze</a>
         <a class="nav-link {% if active_page == 'correlations' %}active{% endif %}" href="{{ url_for('page_correlations', day=day) }}">Correlazioni &amp; Dati</a>
-        <a class="nav-link {% if active_page == 'design' %}active{% endif %}" href="{{ url_for('page_design') }}">Design System</a>
+        <a class="nav-link {% if active_page == 'design' %}active{% endif %}" href="{{ url_for('page_design') }}">📖 Guida Metriche</a>
       </nav>
     </header>
 
@@ -138,6 +138,12 @@
       <div id="drawer-status" class="drawer-status-badge"></div>
     </div>
 
+    <!-- Strato 1B: Spiegazione in Italiano Semplice (Cos'è e come leggerlo) -->
+    <div id="drawer-explanation-section" class="drawer-explanation-box" style="display: none;">
+      <div class="card-label" style="color: var(--color-recovery); margin-bottom: 6px;">💡 Cos'è e come leggere questo dato</div>
+      <div id="drawer-explanation-text" class="drawer-explanation-text"></div>
+    </div>
+
     <!-- Strato 2A: Griglia KPI a 2 colonne (Baseline, Mediana, MAD, Metriche correlate o Dettagli Attività) -->
     <div id="drawer-kpi-section" style="display: none;">
       <div class="card-label" style="margin-bottom: var(--space-2);">Valori Chiave, Baseline e Indicatori</div>
@@ -173,7 +179,7 @@
     </div>
   </aside>
 
-  <script src="{{ url_for('static', filename='js/dashboard.js', v='5') }}"></script>
+  <script src="{{ url_for('static', filename='js/dashboard.js', v='6') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

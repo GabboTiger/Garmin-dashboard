@@ -30,6 +30,384 @@ METRIC_META: dict[str, dict[str, str]] = {
     "spo2_sleep_avg_pct": {"label": "SpO2 Notturna", "unit": "%", "color_var": "--color-sleep"},
 }
 
+# Guida e spiegazione in italiano semplice di tutte le voci tecniche (mostrata nei rettangoli, nel drawer e nella pagina Guida)
+METRIC_GUIDE: dict[str, dict[str, str]] = {
+    "Recupero": {
+        "area": "Recupero & Sistema Nervoso",
+        "short": "Indica quanto il tuo corpo è pronto ad affrontare uno sforzo oggi (0–100), confrontando HRV, FC a riposo, sonno e stress con la tua norma a 30 giorni.",
+        "meaning": (
+            "Il punteggio di Recupero (0–100) stima lo stato del sistema nervoso autonomo al risveglio. "
+            "Combina 5 segnali pesati rispetto alla tua baseline personale a 30 giorni: HRV notturna (35%), FC a riposo invertita (25%), "
+            "durata/qualità del sonno (20%), stress del giorno precedente (10%) e Body Battery al mattino (10%). "
+            "Valori ≥ 70 indicano ottimo recupero (via libera per sedute intense); 45–69 recupero normale; < 45 fatica o stress fisiologico."
+        ),
+    },
+    "Sforzo": {
+        "area": "Attività & Carico",
+        "short": "Misura il carico cardiovascolare e di movimento accumulato nella giornata (0–100) da allenamenti (TRIMP / Zone FC) e passi.",
+        "meaning": (
+            "Il punteggio di Sforzo (0–100) quantifica lo stress fisico della giornata su una scala saturante esponenziale. "
+            "Integra i minuti trascorsi nelle 5 zone di frequenza cardiaca (pesando esponenzialmente le zone alte Z4–Z5 tramite il TRIMP) "
+            "e il movimento di base (passi giornalieri). Un valore di 30–50 corrisponde a una giornata attiva o seduta leggera; 60–80 a un allenamento impegnativo; > 80 a un carico molto elevato."
+        ),
+    },
+    "Sonno": {
+        "area": "Sonno & Architettura",
+        "short": "Valuta il ristoro notturno (0–100) unendo durata rispetto al tuo bisogno (8h), quota di sonno profondo/REM, continuità e regolarità.",
+        "meaning": (
+            "Il punteggio del Sonno (0–100) misura la qualità complessiva del riposo: 40% durata rispetto al fabbisogno personale (480 min), "
+            "25% quota rigenerativa (Profondo N3 + REM, ideale ~40–45% del totale), 20% continuità (pochi minuti di veglia infra-sonno) "
+            "e 15% regolarità dell'orario di metà sonno rispetto alla tua abitudine."
+        ),
+    },
+    "HRV Notturna": {
+        "area": "Recupero & Sistema Nervoso",
+        "short": "Variabilità tra un battito e l'altro nel sonno (rMSSD in ms): più è alta rispetto alla tua norma, più il sistema parasimpatico è rilassato e recuperato.",
+        "meaning": (
+            "L'HRV (Heart Rate Variability, misurata come rMSSD in millisecondi) misura le micro-variazioni di tempo tra i battiti cardiaci durante la notte. "
+            "Non conta il valore assoluto confrontato con altre persone, ma lo scostamento dalla tua mediana a 30 giorni: "
+            "un'HRV stabile o sopra la tua norma indica buon adattamento; un calo netto per più giorni segnala fatica residua, stress, alcol o inizio di malessere."
+        ),
+    },
+    "FC a Riposo": {
+        "area": "Recupero & Sistema Nervoso",
+        "short": "Frequenza cardiaca minima a riposo (bpm): valori più bassi o in linea con la tua norma indicano cuore efficiente e buon recupero.",
+        "meaning": (
+            "La Frequenza Cardiaca a Riposo (RHR, in battiti al minuto) viene rilevata nelle fasi di quiete profonda/risveglio. "
+            "È inversamente legata allo stato di recupero: un aumento di +3/+6 bpm sopra la tua mediana a 30 giorni accompagna spesso allenamenti pesanti non ancora smaltiti, disidratazione, cena tardiva o febbre."
+        ),
+    },
+    "Sonno Totale": {
+        "area": "Sonno & Architettura",
+        "short": "Minuti effettivi di sonno (esclusi i risvegli notturni) confrontati con il tuo fabbisogno personale di 480 min (8 ore).",
+        "meaning": (
+            "Tempo totale effettivamente dormito tra l'addormentamento e il risveglio, sottraendo i periodi di veglia intra-notturna. "
+            "Costituisce la base del recupero muscolare, ormonale e cognitivo."
+        ),
+    },
+    "Body Battery Max": {
+        "area": "Recupero & Sistema Nervoso",
+        "short": "Livello massimo di riserva energetica (0–100 pt) raggiunto al mattino dopo la ricarica notturna.",
+        "meaning": (
+            "La Body Battery (0–100) è un indice sintetico Garmin che sale durante il riposo (quando domina il sistema parasimpatico e l'HRV è alta) "
+            "e scende durante lo sforzo fisico e lo stress mentale. Il valore Max indica il picco raggiunto al risveglio."
+        ),
+    },
+    "Stress Medio": {
+        "area": "Recupero & Sistema Nervoso",
+        "short": "Attivazione fisiologica media nelle 24h (0–100 pt, calcolata da FC e HRV a riposo): più è basso (< 30), più la giornata è stata rilassata.",
+        "meaning": (
+            "Lo Stress Garmin (0–100) misura l'attivazione del sistema nervoso simpatico fuori dagli allenamenti: "
+            "0–25 stato di riposo, 26–50 stress basso, 51–75 stress medio, 76–100 stress elevato. Anche digestione impegnativa, lavoro intenso o recupero post-gara alzano lo stress."
+        ),
+    },
+    "Passi Giornalieri": {
+        "area": "Attività & Carico",
+        "short": "Volume totale di locomozione quotidiana (NEAT + sport): contribuisce al dispendio energetico e alla salute metabolica.",
+        "meaning": (
+            "Numero totale di passi registrati dall'accelerometro da polso nelle 24 ore (camminata quotidiana + corsa/tennis). "
+            "Misura il movimento complessivo fuori e dentro l'allenamento strutturato."
+        ),
+    },
+    "Respirazione Notte": {
+        "area": "Sonno & Architettura",
+        "short": "Atti respiratori al minuto (brpm) durante il sonno: è un parametro molto stabile (12–16 atti/m); aumenti insoliti indicano carico o vie aeree affaticate.",
+        "meaning": (
+            "Frequenza respiratoria media notturna derivata dalla modulazione dell'onda ottica (PPG) e dell'HRV. "
+            "Negli adulti sani a riposo varia pochissimo da una notte all'altra; un rialzo di +1.5/+2 atti/min sopra la tua mediana può segnalare affaticamento o infezione respiratoria."
+        ),
+    },
+    "SpO2 Notturna": {
+        "area": "Sonno & Architettura",
+        "short": "Saturazione media di ossigeno nel sangue durante il sonno (%): valori normali da polso sono tipicamente ≥ 94–95%.",
+        "meaning": (
+            "Stima ottica (Pulse Ox) della percentuale di emoglobina legata all'ossigeno nel sonno. "
+            "Da polso può subire cali temporanei se il braccio è compresso; valori medi stabili ≥ 94% con pochi minuti < 92% sono fisiologici a bassa quota."
+        ),
+    },
+    "ln(rMSSD) 7 giorni": {
+        "area": "Recupero & Sistema Nervoso",
+        "short": "Logaritmo naturale dell'HRV mediato su 7 giorni: linearizza l'HRV riducendo il peso dei picchi isolati (metodo scientifico di Plews).",
+        "meaning": (
+            "In fisiologia dello sport l'HRV ha una distribuzione asimmetrica: si usa il logaritmo naturale ln(rMSSD) mediato su 7 giorni "
+            "e lo si confronta con la tua banda individuale a 60 giorni (media ± 0.75·SD). Finché la media a 7g resta dentro la banda, il carico è ben assimilato."
+        ),
+    },
+    "CV HRV (7 giorni)": {
+        "area": "Recupero & Sistema Nervoso",
+        "short": "Coefficiente di Variazione dell'HRV negli ultimi 7 giorni (%): più è basso (es. 5–12%), più il tuo sistema nervoso è stabile giorno dopo giorno.",
+        "meaning": (
+            "Rapporto tra deviazione standard e media dell'HRV negli ultimi 7 giorni (CV = SD / Media × 100). "
+            "Un CV basso indica stabilità autonomica; un CV molto alto (> 15–20%) indica forti oscillazioni giorno-dopo-giorno dovute a carichi pesanti o sonno irregolare."
+        ),
+    },
+    "Ricarica Body Battery": {
+        "area": "Recupero & Sistema Nervoso",
+        "short": "Punti di energia guadagnati tra il minimo serale e il massimo del mattino: misura quanto la notte ti ha effettivamente ricaricato.",
+        "meaning": (
+            "Differenza netta (ΔBB) di Body Battery accumulata durante il sonno. Una ricarica di +35/+60 punti indica una notte altamente rigenerante; "
+            "< +25 punti indica che il corpo ha lavorato tutta la notte per smaltire stress, digestione o fatica muscolare."
+        ),
+    },
+    "Velocità Ricarica BB": {
+        "area": "Recupero & Sistema Nervoso",
+        "short": "Punti di Body Battery recuperati per ogni ora di sonno (pt/ora): misura l'efficienza oraria del tuo riposo.",
+        "meaning": (
+            "Divide i punti di Body Battery ricaricati per le ore effettive di sonno. Permette di confrontare la qualità rigenerativa del sonno "
+            "indipendentemente dal fatto che tu abbia dormito 6 ore o 9 ore (valori buoni: ≥ 5–7 pt/ora)."
+        ),
+    },
+    "Efficienza Sonno": {
+        "area": "Sonno & Architettura",
+        "short": "Percentuale del tempo a letto trascorsa effettivamente dormendo: ≥ 85–90% indica sonno continuo e con pochi risvegli.",
+        "meaning": (
+            "Rapporto tra il sonno totale effettivo e il tempo totale trascorso a letto (Sonno / (Sonno + Veglia) × 100). "
+            "Un'efficienza ≥ 88–90% è indice di sonno consolidato; valori < 85% indicano sonno frammentato o lunghi risvegli notturni."
+        ),
+    },
+    "Sonno Profondo": {
+        "area": "Sonno & Architettura",
+        "short": "Percentuale di sonno ad onde lente (N3): è la fase dedicata alla riparazione muscolare, al rilascio di GH e al recupero fisico.",
+        "meaning": (
+            "Il sonno profondo si concentra nella prima metà della notte. Negli adulti rappresenta tipicamente il 15–23% del sonno totale (circa 60–110 min). "
+            "Aumenta dopo allenamenti muscolari intensi; si riduce con alcol, stress serale o camera troppo calda."
+        ),
+    },
+    "Sonno REM": {
+        "area": "Sonno & Architettura",
+        "short": "Percentuale di sonno REM (Rapid Eye Movement): fase cruciale per memoria, coordinazione motoria e recupero cognitivo/emotivo.",
+        "meaning": (
+            "Il sonno REM predomina nella seconda metà della notte e al mattino (tipicamente 20–25% del sonno totale, circa 90–120 min). "
+            "Svegliarsi molto presto con la sveglia taglia soprattutto gli ultimi cicli ricchi di REM."
+        ),
+    },
+    "Risvegli (≥2 min)": {
+        "area": "Sonno & Architettura",
+        "short": "Numero di interruzioni del sonno di durata ≥ 2 minuti rilevate nell'ipnogramma notturno.",
+        "meaning": (
+            "Conta quanti episodi di veglia di almeno 2 minuti interrompono la continuità del sonno. "
+            "Pochi risvegli brevi (1–3 a notte) sono normali tra un ciclo e l'altro; molti risvegli riducono il potere ristoratore del sonno."
+        ),
+    },
+    "Latenza 1° Profondo": {
+        "area": "Sonno & Architettura",
+        "short": "Minuti trascorsi dall'inizio del sonno all'ingresso nella prima fase di sonno profondo (tipicamente 15–40 min).",
+        "meaning": (
+            "Misura quanto rapidamente il cervello scende nel sonno ad onde lente (N3) dopo l'addormentamento. "
+            "Una latenza breve (15–35 min) riflette una buona pressione omeostatica del sonno."
+        ),
+    },
+    "Latenza 1° REM": {
+        "area": "Sonno & Architettura",
+        "short": "Minuti dall'addormentamento al primo episodio REM: chiude il primo ciclo completo del sonno (tipicamente 70–110 min).",
+        "meaning": (
+            "Tempo impiegato per completare la prima discesa NREM ed entrare nel primo episodio REM della notte (normalmente tra 70 e 110 minuti)."
+        ),
+    },
+    "Cicli NREM→REM": {
+        "area": "Sonno & Architettura",
+        "short": "Numero di cicli completi del sonno (da ~90 min ciascuno): una notte di 7.5–8 ore ne comprende idealmente 4 o 5.",
+        "meaning": (
+            "Ogni notte il cervello alterna fasi di sonno leggero/profondo (NREM) e sonno REM in cicli di circa 90–100 minuti. "
+            "Completare 4–5 cicli garantisce sia il recupero fisico (primi cicli) sia quello nervoso/cognitivo (ultimi cicli)."
+        ),
+    },
+    "Indice Regolarità (SRI)": {
+        "area": "Sonno & Architettura",
+        "short": "Punteggio 0–100 che misura quanto vai a dormire e ti svegli agli stessi orari negli ultimi 30 giorni: più è alto, più il ritmo circadiano è allineato.",
+        "meaning": (
+            "Lo Sleep Regularity Index (SRI) penalizza la dispersione (deviazione standard circolare) dell'ora di addormentamento e di risveglio. "
+            "SRI ≥ 80 indica orari molto regolari; < 65 indica forte variabilità che affatica l'orologio biologico anche se dormi abbastanza ore."
+        ),
+    },
+    "Metà del Sonno Media": {
+        "area": "Sonno & Architettura",
+        "short": "Orario centrale tra addormentamento e risveglio (es. dormire 23:30–07:30 ha metà sonno alle 03:30): definisce il tuo cronotipo.",
+        "meaning": (
+            "Il punto mediano del sonno (Mid-sleep) è il marcatore principale della fase del tuo ritmo circadiano interno."
+        ),
+    },
+    "Social Jetlag (WE vs Fer.)": {
+        "area": "Sonno & Architettura",
+        "short": "Spostamento in minuti della metà del sonno tra weekend e giorni feriali: idealmente entro ±45 min per non sfasare il ritmo circadiano.",
+        "meaning": (
+            "Differenza tra l'orario mediano del sonno nel fine settimana (venerdì/sabato notte) e nei giorni lavorativi. "
+            "Uno sfasamento di +90/+120 min equivale a cambiare fuso orario ogni weekend, causando stanchezza il lunedì mattina."
+        ),
+    },
+    "Variabilità Addormentamento": {
+        "area": "Sonno & Architettura",
+        "short": "Oscillazione tipica (±SD in minuti) dell'ora in cui ti addormenti: sotto ±30–40 min indica ottima costanza serale.",
+        "meaning": (
+            "Deviazione standard circolare dell'orario di inizio sonno negli ultimi 30 giorni. Più è contenuta (< 35 min), più rapido e profondo è l'addormentamento."
+        ),
+    },
+    "FC Minima Notturna": {
+        "area": "Sonno & Architettura",
+        "short": "Il battito più basso toccato nel sonno (Nadir FC): se raggiunto presto nella notte indica digestione leggera e rapido rilassamento.",
+        "meaning": (
+            "Valore minimo assoluto della frequenza cardiaca durante la notte e relativo orario. "
+            "Dopo cene abbondanti, alcol o allenamenti serali intensi il nadir resta più alto e viene raggiunto solo verso il mattino."
+        ),
+    },
+    "Debito Sonno (7 giorni)": {
+        "area": "Sonno & Architettura",
+        "short": "Ore di sonno mancanti accumulate negli ultimi 7 giorni rispetto al tuo fabbisogno di 8h/notte (0 h = nessun debito).",
+        "meaning": (
+            "Somma delle ore di sonno perse negli ultimi 7 giorni rispetto all'obiettivo personale configurato (8.0 ore a notte). "
+            "Un debito > 3–4 ore su 7 giorni riduce la reattività e abbassa l'HRV."
+        ),
+    },
+    "Debito Sonno (14 giorni)": {
+        "area": "Sonno & Architettura",
+        "short": "Ore di sonno mancanti accumulate nelle ultime 2 settimane rispetto al fabbisogno di 8h/notte.",
+        "meaning": (
+            "Bilancio cumulato del deficit di sonno su 14 giorni per monitorare la carenza cronica di riposo."
+        ),
+    },
+    "Carico Acuto (ATL 7g)": {
+        "area": "Attività & Carico",
+        "short": "Fatica recente (media esponenziale a 7 giorni del TRIMP giornaliero): mostra quanto ti sei allenato nell'ultima settimana.",
+        "meaning": (
+            "L'Acute Training Load (ATL) è la media mobile esponenziale a 7 giorni del carico TRIMP giornaliero. "
+            "Rappresenta la 'Fatica' a breve termine: sale rapidamente dopo giorni di allenamento intenso e scende nei giorni di riposo."
+        ),
+    },
+    "Carico Cronico (CTL 28g)": {
+        "area": "Attività & Carico",
+        "short": "Fitness di base (media esponenziale a 28 giorni del TRIMP): indica il volume di lavoro a cui il tuo corpo è abituato nell'ultimo mese.",
+        "meaning": (
+            "Il Chronic Training Load (CTL) è la media mobile esponenziale a 28 giorni del carico TRIMP. "
+            "Rappresenta la tua 'Fitness' o cilindrata aerobica storica: costruirla richiede settimane di costanza."
+        ),
+    },
+    "Bilancio TSB (Fitness-Fatica)": {
+        "area": "Attività & Carico",
+        "short": "Freschezza atletica (TSB = CTL − ATL): positivo (+5/+15) = fresco e brillante per gareggiare; negativo (−10/−25) = in fase di carico.",
+        "meaning": (
+            "Il Training Stress Balance (TSB = Fitness CTL − Fatica ATL) misura il bilancio tra condizionamento e stanchezza: "
+            "valori leggermente negativi (−5 a −20) sono normali durante i blocchi di allenamento; valori positivi (+5 a +15) indicano gambe fresche (ideale prima di un match o gara)."
+        ),
+    },
+    "Rapporto ACWR": {
+        "area": "Attività & Carico",
+        "short": "Rapporto Fatica 7g / Fitness 28g (ATL / CTL): la zona ottimale e sicura è 0.8–1.3; sopra 1.5 indica aumento troppo brusco del carico.",
+        "meaning": (
+            "L'Acute:Chronic Workload Ratio (ACWR = ATL / CTL, modello di Gabbett) confronta quanto stai facendo questa settimana con ciò a cui sei abituato da un mese: "
+            "< 0.80 sotto-allenamento/scarico; 0.80–1.30 'sweet spot' (progressione sicura); > 1.50 picco di carico a maggior rischio di sovraccarico."
+        ),
+    },
+    "Tempo Zone 7g (Totale)": {
+        "area": "Attività & Carico",
+        "short": "Minuti totali di attività con cardiofrequenzimetro registrati nelle 5 zone cardiache (Z1–Z5) negli ultimi 7 giorni.",
+        "meaning": (
+            "Somma di tutti i minuti trascorsi nelle zone di frequenza cardiaca Z1–Z5 durante le attività degli ultimi 7 giorni."
+        ),
+    },
+    "Quota Bassa Intensità (Z1+Z2)": {
+        "area": "Attività & Carico",
+        "short": "Percentuale del tempo settimanale passata in Zona 1 e Zona 2 (recupero e base aerobica): costruisce resistenza senza bruciare il recupero.",
+        "meaning": (
+            "Frazione del volume settimanale svolta a bassa intensità cardiaca (Z1 + Z2, sotto ~75–80% FCmax). "
+            "Negli sport di resistenza una quota Z1+Z2 del 65–80% permette di sviluppare i mitocondri e recuperare rapidamente."
+        ),
+    },
+    "Quota Alta Intensità (Z4+Z5)": {
+        "area": "Attività & Carico",
+        "short": "Percentuale del tempo settimanale in Zona 4 (Soglia) e Zona 5 (VO2max): stimola la potenza aerobica ma richiede 24–48h di recupero.",
+        "meaning": (
+            "Frazione del tempo settimanale trascorsa ad alta intensità (Z4 Soglia Anaerobica + Z5 Massimale). "
+            "Nel tennis e nelle corse veloci questa quota sale: monitorarla aiuta a non accumulare troppi giorni consecutivi in Z4–Z5."
+        ),
+    },
+    "TRIMP": {
+        "area": "Attività & Carico",
+        "short": "Training Impulse di Banister: misura il carico interno di una seduta combinando durata e intensità cardiaca pesata esponenzialmente.",
+        "meaning": (
+            "Il TRIMP (Training Impulse) trasforma durata e frequenza cardiaca di un allenamento in un unico punteggio di carico fisiologico. "
+            "Poiché il fattore esponenziale cresce con la riserva cardiaca, 40 minuti a battiti alti (es. Corsa in Z3–Z4 o Tennis intenso) generano molto più TRIMP di 60 minuti blandi in Z1 (es. Pesi con ampie pause)."
+        ),
+    },
+    "HRR (60s / 120s)": {
+        "area": "Attività & Carico",
+        "short": "Quanti battiti scende il cuore in 60s e 120s dopo uno sforzo: un calo rapido (es. ≥ 20–30 bpm in 60s) indica ottima reattività vagale e forma.",
+        "meaning": (
+            "L'Heart Rate Recovery (HRR60 e HRR120) misura di quanti bpm scende la frequenza cardiaca a 60 e 120 secondi dalla cessazione di uno sforzo attivo. "
+            "È un indicatore diretto della riattivazione del nervo vago (sistema parasimpatico): più battiti perdi in 1–2 minuti, migliore è il tuo stato di forma e freschezza. "
+            "Richiede la serie secondo-per-secondo (`activity_details`) con pause di recupero o 1–2 minuti a fine seduta."
+        ),
+    },
+    "Deriva Cardiaca (Cardiac Drift)": {
+        "area": "Attività & Carico",
+        "short": "Aumento % della FC tra la 1ª e la 2ª metà della seduta: < 5% a passo costante indica ottima tenuta aerobica e buona idratazione.",
+        "meaning": (
+            "La Deriva Cardiaca confronta la frequenza cardiaca (e il rapporto velocità/FC, detto disaccoppiamento Pa:Hr) della seconda metà dell'allenamento con la prima metà. "
+            "Su una corsa a passo costante ≥ 30 min, una deriva < 3.5–5% indica che la resistenza aerobica regge perfettamente la distanza; > 5% segnala affaticamento muscolare, caldo o disidratazione. "
+            "Negli sport intermittenti (es. Tennis) indica la variazione di intensità cardiaca tra seconda e prima metà del match."
+        ),
+    },
+    "Efficienza Velocità/FC": {
+        "area": "Attività & Carico",
+        "short": "Metri percorsi per ogni singolo battito cardiaco (m/battito): più questo numero sale nel tempo a parità di sport, più sei diventato economico.",
+        "meaning": (
+            "L'Efficiency Factor (EF = velocità in m/min ÷ FC media in bpm) misura quanta strada percorri per ogni battito del cuore. "
+            "Ad esempio, correre a 5:00/km (200 m/min) a 156 bpm dà 1.28 m/battito; se dopo un mese corri allo stesso passo a 148 bpm, l'efficienza sale a 1.35 m/battito."
+        ),
+    },
+    "Training Effect (AE / AnE)": {
+        "area": "Attività & Carico",
+        "short": "Stima Garmin (da 0.0 a 5.0) dello stimolo allenante Aerobico (AE, resistenza) e Anaerobico (AnE, scatti e picchi) della seduta.",
+        "meaning": (
+            "Il Training Effect Garmin valuta da 0.0 a 5.0 quanto la seduta migliora la capacità Aerobica (AE) e Anaerobica (AnE): "
+            "1.0–1.9 Recupero/Beneficio minimo; 2.0–2.9 Mantenimento; 3.0–3.9 Miglioramento; 4.0–4.9 Miglioramento elevato; 5.0 Sovraccarico."
+        ),
+    },
+    "Baseline Mediana 30g & Z-score Robusto": {
+        "area": "Statistica & Trend",
+        "short": "Confronta il dato di oggi con la tua mediana degli ultimi 30 giorni usando lo scostamento mediano assoluto (MAD), immune ai valori anomali.",
+        "meaning": (
+            "Invece di usare soglie fisse uguali per tutti o la media aritmetica (che viene falsata da una singola notte insonne), "
+            "la dashboard calcola la tua Mediana mobile a 30 giorni e la dispersione robusta MAD. Lo Z-score robusto z = (Valore − Mediana) / (1.4826 · MAD) "
+            "indica di quante tue 'deviazioni standard' il valore di oggi si discosta dalla tua abitudine: tra −1 e +1 sei 'in linea con la tua norma'."
+        ),
+    },
+    "Trend Theil-Sen, Mann-Kendall & CUSUM": {
+        "area": "Statistica & Trend",
+        "short": "Metodi statistici robusti per capire se una metrica sta davvero salendo/scendendo (Theil-Sen, p-value) o se ha cambiato regime (CUSUM).",
+        "meaning": (
+            "La pendenza di Theil-Sen calcola la mediana di tutte le pendenze tra coppie di giorni (es. +0.8 ms/settimana), mentre il test di Mann-Kendall "
+            "verifica se il trend è statisticamente reale (p < 0.05) o semplice oscillazione casuale. Il CUSUM rileva invece i punti di svolta in cui la media si sposta stabilmente verso l'alto o verso il basso."
+        ),
+    },
+    "Correlazione di Spearman (ρ) & Lag": {
+        "area": "Statistica & Trend",
+        "short": "Misura da −1 a +1 se due metriche si muovono insieme (Lag 0) o se una metrica di oggi influenza quella di domani/dopo-domani (Lag 1/2).",
+        "meaning": (
+            "Il coefficiente per ranghi di Spearman (ρ tra −1 e +1) valuta relazioni monotone senza assumere linearità: "
+            "ρ > 0 indica che all'aumentare di X aumenta anche Y; ρ < 0 indica che all'aumentare di X diminuisce Y (es. più carico oggi → HRV più bassa domani a Lag +1). "
+            "Ricorda sempre: correlazione esplorativa non dimostra da sola un rapporto di causa-effetto."
+        ),
+    },
+}
+
+
+def get_metric_explanation(label: str) -> dict[str, str]:
+    """Restituisce `{short, meaning, area}` per il titolo di una scheda (gestendo anche prefissi dinamici come 'Tempo SpO2 <')."""
+    if not label:
+        return {"short": "", "meaning": "", "area": ""}
+    if label in METRIC_GUIDE:
+        return METRIC_GUIDE[label]
+    if label.startswith("Tempo SpO2 <"):
+        return {
+            "area": "Sonno & Architettura",
+            "short": "Minuti trascorsi durante la notte con saturazione SpO2 sotto la soglia di attenzione (92%): idealmente vicino a 0 min.",
+            "meaning": (
+                "Conta i minuti notturni in cui il sensore ottico Pulse Ox ha registrato valori di SpO2 inferiori al 92%. "
+                "Pochi minuti isolati possono dipendere dalla posizione del braccio; valori elevati e ripetuti meritano attenzione."
+            ),
+        }
+    return {"short": "", "meaning": "", "area": ""}
+
 
 def _is_demo_mode() -> bool:
     return os.getenv("DEMO_MODE", "1").strip() in ("1", "true", "True", "yes")
@@ -244,26 +622,76 @@ def _enrich_activities_with_analysis(
             kpis.append({"label": "Carico TRIMP Calcolato", "value": f"{trimp['value']} TRIMP ({trimp['method']})"})
         if efficiency["calculable"]:
             kpis.append({"label": "Efficienza Velocità/FC", "value": f"{efficiency['value']} m/battito"})
+        # Formattazione esplicita HRR (60s / 120s) e Deriva FC per tabella e drawer
+        has_details_1s = details_raw is not None
+        act_item["has_details_1s"] = has_details_1s
+
         if hrr["calculable"]:
-            hrr_txt = f"-{hrr['value']['hrr_60_bpm']} bpm a 60s"
-            if hrr["value"].get("hrr_120_bpm") is not None:
-                hrr_txt += f" / -{hrr['value']['hrr_120_bpm']} bpm a 120s"
-            kpis.append({"label": "Recupero FC Post-Esercizio (HRR)", "value": hrr_txt})
-        else:
-            kpis.append({"label": "Recupero FC (HRR)", "value": f"Non calcolabile ({hrr.get('reason', '')})"})
-        if drift["calculable"]:
+            hrr60 = hrr["value"]["hrr_60_bpm"]
+            hrr120 = hrr["value"].get("hrr_120_bpm")
+            hrr_display = f"-{hrr60:.0f}" + (f" / -{hrr120:.0f} bpm" if hrr120 is not None else " bpm")
+            hrr_sub = "pause intra-seduta" if hrr.get("quality_flag") == "intra_session" else "post-esercizio"
+            hrr_txt = f"-{hrr60} bpm a 60s" + (f" / -{hrr120} bpm a 120s ({hrr_sub})" if hrr120 is not None else f" ({hrr_sub})")
+            kpis.append({"label": "Recupero FC (HRR 60s/120s)", "value": hrr_txt})
+        elif not has_details_1s:
+            hrr_display = "Sync 1s assente"
+            hrr_sub = "esegui sync"
             kpis.append(
                 {
-                    "label": "Deriva Cardiaca (1ª vs 2ª metà)",
-                    "value": f"{drift['value']['hr_drift_pct']}% (Pa:Hr {drift['value']['aerobic_decoupling_pct']}%)",
+                    "label": "Recupero FC (HRR 60s/120s)",
+                    "value": "Serie 1s non ancora sincronizzata (esegui: python -m app.cli sync --days 30)",
                 }
             )
+        else:
+            hrr_display = "Stop < 60s"
+            hrr_sub = "fine immediata"
+            kpis.append({"label": "Recupero FC (HRR 60s/120s)", "value": f"Non calcolabile ({hrr.get('reason', '')})"})
+
+        if drift["calculable"]:
+            d_val = drift["value"]["hr_drift_pct"]
+            drift_display = f"{'+' if d_val > 0 else ''}{d_val}%"
+            drift_sub = "2ª vs 1ª metà (var.)" if drift.get("quality_flag") == "variable_pace" else f"Pa:Hr {drift['value']['aerobic_decoupling_pct']}%"
+            kpis.append(
+                {
+                    "label": "Deriva Cardiaca (2ª vs 1ª metà)",
+                    "value": f"{drift_display} · FC 1ª metà {drift['value']['hr_first_half_bpm']} → 2ª metà {drift['value']['hr_second_half_bpm']} bpm",
+                }
+            )
+        elif act_type == "strength_training":
+            drift_display = "N/A (Forza)"
+            drift_sub = "solo sport aerobici"
+            kpis.append({"label": "Deriva Cardiaca", "value": "Non applicabile (sessione di forza statica senza locomozione)"})
+        elif not has_details_1s:
+            drift_display = "Sync 1s assente"
+            drift_sub = "esegui sync"
+            kpis.append(
+                {
+                    "label": "Deriva Cardiaca",
+                    "value": "Serie 1s non ancora sincronizzata (esegui: python -m app.cli sync --days 30)",
+                }
+            )
+        else:
+            drift_display = "Durata < 30m"
+            drift_sub = "seduta breve"
+            kpis.append({"label": "Deriva Cardiaca", "value": f"Non calcolabile ({drift.get('reason', '')})"})
+
+        act_item["hrr_display"] = hrr_display
+        act_item["hrr_sub"] = hrr_sub
+        act_item["drift_display"] = drift_display
+        act_item["drift_sub"] = drift_sub
 
         act_item["detail_payload"] = {
             "title": f"{act.get('name') or type_badge} ({act.get('day')})",
             "display_value": trimp["value"] if trimp["calculable"] else act_item["duration_fmt"],
             "unit": "TRIMP" if trimp["calculable"] else "",
             "subtitle": f"{type_badge} · {act_item['duration_fmt']}" + (f" · {act_item['calories_kcal']} kcal" if act_item["calories_kcal"] else ""),
+            "explanation": (
+                "• TRIMP (Training Impulse): misura il carico interno pesando esponenzialmente i minuti passati a battiti alti.\n"
+                "• Training Effect (AE / AnE): stima da 0 a 5 quanto la seduta allena la resistenza aerobica (AE) e la capacità anaerobica/scatti (AnE).\n"
+                "• HRR (60s / 120s): quanti bpm scende il cuore in 1 e 2 minuti dopo i picchi di sforzo (più scende rapidamente, migliore è il recupero vagale).\n"
+                "• Deriva FC: variazione % della FC tra 2ª e 1ª metà della seduta (< 5% a passo costante indica ottima tenuta aerobica).\n"
+                "• Efficienza (m/b): metri percorsi per ogni singolo battito cardiaco."
+            ),
             "kpis": kpis,
             "zones_bars": zones_bars if tot_z_s > 0 else [],
             "assumptions": trimp["assumptions"] + hrr["assumptions"] + drift["assumptions"],
@@ -395,6 +823,8 @@ def create_app(db_path: Path | str | None = None, demo_mode: bool | None = None)
     app.config["DB_PATH"] = resolved_db_path
     app.config["DEMO_MODE"] = resolved_demo
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
+    app.jinja_env.auto_reload = True
 
     # Inizializza lo schema; se siamo in DEMO_MODE e il DB demo è vuoto (o privo di serie raw Step 2), genera i 90 giorni sintetici
     conn = db.connect(resolved_db_path)
@@ -406,12 +836,23 @@ def create_app(db_path: Path | str | None = None, demo_mode: bool | None = None)
             synthetic.seed_synthetic_db(conn, days=90, seed=42)
     conn.close()
 
+    @app.after_request
+    def add_no_cache_headers(response: Response) -> Response:
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
     @app.context_processor
     def inject_available_days() -> dict[str, Any]:
         c = db.connect(app.config["DB_PATH"])
         rows = c.execute("SELECT day FROM daily ORDER BY day ASC").fetchall()
         c.close()
-        return {"available_days": [str(r["day"]) for r in rows]}
+        return {
+            "available_days": [str(r["day"]) for r in rows],
+            "metric_guide": METRIC_GUIDE,
+            "get_metric_explanation": get_metric_explanation,
+        }
 
     @app.get("/")
     def index() -> str:
@@ -805,7 +1246,7 @@ def main() -> None:
     host = "127.0.0.1"
     port = int(os.getenv("PORT", "5000"))
     print(f"Dashboard Garmin attiva su http://{host}:{port} (DEMO_MODE={app.config['DEMO_MODE']})")
-    app.run(host=host, port=port, debug=False)
+    app.run(host=host, port=port, debug=False, use_reloader=True)
 
 
 if __name__ == "__main__":

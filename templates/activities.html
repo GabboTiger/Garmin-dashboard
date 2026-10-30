@@ -98,6 +98,15 @@
 <!-- Elenco attività con analisi completa -->
 <h2 class="section-title">Elenco Attività Registrate (clicca una riga per aprire tutti i parametri e le 5 Zone FC)</h2>
 <section class="card">
+  <div class="card-meaning-hint" style="margin-bottom: var(--space-3);">
+    <strong>Guida rapida colonne:</strong>
+    <strong>TRIMP</strong> = carico cardiovascolare pesato esponenzialmente ·
+    <strong>AE / AnE</strong> = Training Effect Aerobico / Anaerobico (0–5) ·
+    <strong>HRR 60s/120s</strong> = calo battiti in 1–2 min dopo lo sforzo ·
+    <strong>Deriva FC</strong> = variazione % FC tra 2ª e 1ª metà ·
+    <strong>Efficienza</strong> = metri percorsi per singolo battito.
+    <em>(Se vedi "Sync 1s assente", esegui <code>./env/bin/python -m app.cli sync --days 30</code> per scaricare le serie secondo-per-secondo delle attività meno recenti).</em>
+  </div>
   {% if activities %}
   <div class="table-wrap">
     <table class="table-clean">
@@ -113,6 +122,8 @@
           <th>Training Effect</th>
           <th>Zone FC (Z1–Z5)</th>
           <th>TRIMP</th>
+          <th>HRR (60s / 120s)</th>
+          <th>Deriva FC</th>
           <th>Efficienza</th>
         </tr>
       </thead>
@@ -172,6 +183,22 @@
               <strong style="color: var(--color-strain);">{{ act.trimp.value }}</strong>
             {% else %}
               <span class="quality-pill">n/d</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if act.hrr and act.hrr.calculable %}
+              <strong style="color: var(--color-recovery);">{{ act.hrr_display }}</strong>
+              <div style="font-size: 10px; color: var(--text-muted);">{{ act.hrr_sub }}</div>
+            {% else %}
+              <span class="quality-pill" title="{{ act.hrr.reason if act.hrr else '' }}">{{ act.hrr_display }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if act.drift and act.drift.calculable %}
+              <strong>{{ act.drift_display }}</strong>
+              <div style="font-size: 10px; color: var(--text-muted);">{{ act.drift_sub }}</div>
+            {% else %}
+              <span class="quality-pill" title="{{ act.drift.reason if act.drift else '' }}">{{ act.drift_display }}</span>
             {% endif %}
           </td>
           <td>

@@ -66,4 +66,5 @@ Apri nel browser: **`http://127.0.0.1:5000`**
 ```bash
 ./env/bin/pytest -v
 ```
-Per una spiegazione dettagliata di come funzionano i test automatici, le fixture (`tmp_path`, `monkeypatch`) e la verifica dei segnali sintetici, consulta [`GUIDA_TEST.md`](GUIDA_TEST.md).
+Per una roadmap completa di studio del codice, spiegazione dell'architettura, modelli matematici e guida dettagliata a `pytest` (`tmp_path`, `monkeypatch`, test Monte Carlo e test client Flask), consulta **[`GUIDA.md`](GUIDA.md)**.
+

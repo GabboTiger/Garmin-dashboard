@@ -459,6 +459,53 @@
       }
     }
 
+    // 2A-bis. Tracciato 1-secondo FC & Velocità nel Drawer per le Attività
+    const tsSecEl = document.getElementById("drawer-timeseries-section");
+    const tsChartEl = document.getElementById("drawer-activity-chart");
+    const tsBadgeEl = document.getElementById("drawer-timeseries-badge");
+    const tsNoteEl = document.getElementById("drawer-timeseries-note");
+    if (tsSecEl && tsChartEl) {
+      if (payload.activity_id) {
+        tsSecEl.style.display = "block";
+        tsChartEl.innerHTML = '<div class="state-box" style="padding:18px;">Caricamento tracciato ad alta risoluzione...</div>';
+        if (tsBadgeEl) tsBadgeEl.textContent = "Caricamento...";
+        if (tsNoteEl) tsNoteEl.textContent = "";
+
+        fetch("/api/activity/" + encodeURIComponent(payload.activity_id) + "/timeseries")
+          .then(function (r) { return r.json(); })
+          .then(function (tsData) {
+            if (!tsData || !tsData.available) {
+              tsChartEl.innerHTML =
+                '<div class="state-box" style="padding:18px;">' +
+                "Serie secondo-per-secondo non ancora presente in cache per questa attività. " +
+                'Clicca <strong>🔄 Sincronizza Ora</strong> in alto per scaricare i tracciati mancanti.' +
+                "</div>";
+              if (tsBadgeEl) tsBadgeEl.textContent = "Assente";
+              return;
+            }
+            tsChartEl.innerHTML = "";
+            if (tsBadgeEl) tsBadgeEl.textContent = tsData.n_raw_samples + " campioni";
+            if (tsNoteEl) {
+              let noteParts = [];
+              if (tsData.half1_hr_mean !== null && tsData.half2_hr_mean !== null) {
+                noteParts.push("FC media 1ª metà: " + tsData.half1_hr_mean + " bpm → 2ª metà: " + tsData.half2_hr_mean + " bpm");
+              }
+              if (Array.isArray(tsData.hrr_markers) && tsData.hrr_markers.length > 0) {
+                noteParts.push("Evidenziati " + tsData.hrr_markers.length + " picchi con recupero HRR a 60s");
+              }
+              tsNoteEl.textContent = noteParts.join(" · ");
+            }
+            renderActivityTimeseriesChart("drawer-activity-chart", tsData);
+          })
+          .catch(function () {
+            tsChartEl.innerHTML = '<div class="state-box" style="padding:18px;">Impossibile caricare il tracciato.</div>';
+          });
+      } else {
+        tsSecEl.style.display = "none";
+        tsChartEl.innerHTML = "";
+      }
+    }
+
     // 2B. Barre delle 5 Zone Cardiache (per le attività o per la distribuzione settimanale)
     let zonesList = Array.isArray(payload.zones_bars) ? payload.zones_bars : [];
     if (zonesList.length === 0 && payload.value && Array.isArray(payload.value.zones)) {
@@ -1333,6 +1380,252 @@
     Plotly.newPlot(el, traces, layout, { displayModeBar: false, responsive: true });
   }
 
+  function renderActivityTimeseriesChart(containerId, tsData) {
+    const el = document.getElementById(containerId);
+    if (!el || typeof Plotly === "undefined" || !tsData || !tsData.available) return;
+
+    const x = tsData.elapsed_min || [];
+    const hr = tsData.hr_bpm || [];
+    const spd = tsData.speed_kmh || [];
+    const hasSpeed = spd.some(function (v) { return v > 0.5; });
+
+    const cHr = getCssToken("--color-strain") || "#FB923C";
+    const cSpd = getCssToken("--color-recovery") || "#2DD4BF";
+    const cSleep = getCssToken("--color-sleep") || "#818CF8";
+
+    const traces = [
+      {
+        x: x,
+        y: hr,
+        type: "scatter",
+        mode: "lines",
+        name: "FC (bpm)",
+        line: { color: cHr, width: 2 },
+        hovertemplate: "Min %{x}m<br><b>%{y} bpm</b><extra></extra>"
+      }
+    ];
+
+    if (hasSpeed) {
+      traces.push({
+        x: x,
+        y: spd,
+        yaxis: "y2",
+        type: "scatter",
+        mode: "lines",
+        name: "Velocità (km/h)",
+        line: { color: cSpd, width: 1.5, dash: "dot" },
+        opacity: 0.72,
+        hovertemplate: "Min %{x}m<br><b>%{y} km/h</b><extra></extra>"
+      });
+    }
+
+    if (Array.isArray(tsData.hrr_markers) && tsData.hrr_markers.length > 0) {
+      traces.push({
+        x: tsData.hrr_markers.map(function (m) { return m.rec_min; }),
+        y: tsData.hrr_markers.map(function (m) { return m.rec_hr; }),
+        text: tsData.hrr_markers.map(function (m) { return m.label + " (da " + m.peak_hr + " a " + m.rec_hr + " bpm)"; }),
+        type: "scatter",
+        mode: "markers",
+        name: "Recupero HRR 60s",
+        marker: { size: 9, color: cSpd, symbol: "diamond", line: { width: 2, color: "#0B0D12" } },
+        hovertemplate: "%{text}<extra></extra>"
+      });
+    }
+
+    const layout = basePlotlyLayout("FC (bpm)");
+    layout.xaxis.title = { text: "Tempo trascorso (min)", font: { size: 11 } };
+    layout.margin = { t: 26, r: hasSpeed ? 48 : 18, b: 38, l: 46 };
+    if (hasSpeed) {
+      layout.yaxis2 = {
+        title: { text: "km/h", font: { size: 11, color: cSpd } },
+        overlaying: "y",
+        side: "right",
+        showgrid: false,
+        zeroline: false,
+        tickfont: { size: 10, color: cSpd }
+      };
+    }
+
+    const shapes = [];
+    if (
+      tsData.half1_hr_mean !== null &&
+      tsData.half2_hr_mean !== null &&
+      tsData.mid_elapsed_min !== null &&
+      x.length > 2
+    ) {
+      shapes.push({
+        type: "line",
+        x0: x[0],
+        x1: tsData.mid_elapsed_min,
+        y0: tsData.half1_hr_mean,
+        y1: tsData.half1_hr_mean,
+        line: { color: cSleep, width: 1.5, dash: "dash" }
+      });
+      shapes.push({
+        type: "line",
+        x0: tsData.mid_elapsed_min,
+        x1: x[x.length - 1],
+        y0: tsData.half2_hr_mean,
+        y1: tsData.half2_hr_mean,
+        line: { color: cSleep, width: 1.5, dash: "dash" }
+      });
+    }
+    layout.shapes = shapes;
+
+    Plotly.newPlot(el, traces, layout, { displayModeBar: false, responsive: true });
+  }
+
+  function renderTagImpactsChart(containerId, tagImpacts) {
+    const el = document.getElementById(containerId);
+    if (!el || typeof Plotly === "undefined" || !Array.isArray(tagImpacts) || tagImpacts.length === 0) return;
+
+    const labels = tagImpacts.map(function (t) { return t.label; });
+    const hrvD = tagImpacts.map(function (t) { return t.hrv_delta_ms !== null ? t.hrv_delta_ms : 0; });
+    const rhrD = tagImpacts.map(function (t) { return t.rhr_delta_bpm !== null ? t.rhr_delta_bpm : 0; });
+
+    const layout = basePlotlyLayout("Scostamento Mediano (Δ)");
+    layout.barmode = "group";
+
+    Plotly.newPlot(
+      el,
+      [
+        {
+          x: labels,
+          y: hrvD,
+          type: "bar",
+          name: "Δ HRV Notte (ms)",
+          marker: { color: "#2DD4BF" },
+          hovertemplate: "%{x}<br>Δ HRV: <b>%{y} ms</b><extra></extra>"
+        },
+        {
+          x: labels,
+          y: rhrD,
+          type: "bar",
+          name: "Δ FC Riposo (bpm)",
+          marker: { color: "#FB923C" },
+          hovertemplate: "%{x}<br>Δ FC Riposo: <b>%{y} bpm</b><extra></extra>"
+        }
+      ],
+      layout,
+      { displayModeBar: false, responsive: true }
+    );
+  }
+
+  function initSyncNowButton() {
+    const btn = document.getElementById("sync-now-btn");
+    const badge = document.getElementById("sync-status-badge");
+    if (!btn || !badge) return;
+
+    let pollTimer = null;
+
+    function checkStatus() {
+      fetch("/api/sync/status")
+        .then(function (r) { return r.json(); })
+        .then(function (st) {
+          if (!st) return;
+          badge.style.display = "inline-flex";
+          badge.textContent = st.message || "";
+          if (st.running) {
+            btn.disabled = true;
+            btn.textContent = "⏳ Sync in corso...";
+            badge.className = "sync-status-badge status-in_line";
+          } else {
+            if (pollTimer) {
+              clearInterval(pollTimer);
+              pollTimer = null;
+            }
+            btn.disabled = false;
+            btn.textContent = "🔄 Sincronizza Ora";
+            if (st.status === "ok" || st.status === "partial") {
+              badge.className = "sync-status-badge status-improving";
+              setTimeout(function () {
+                window.location.reload();
+              }, 900);
+            } else if (st.status === "error") {
+              badge.className = "sync-status-badge status-worsening";
+            }
+          }
+        })
+        .catch(function () {});
+    }
+
+    btn.addEventListener("click", function () {
+      btn.disabled = true;
+      btn.textContent = "⏳ Avvio...";
+      badge.style.display = "inline-flex";
+      badge.className = "sync-status-badge status-in_line";
+      badge.textContent = "Avvio sincronizzazione...";
+
+      fetch("/api/sync/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days: 30 })
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (st) {
+          badge.textContent = (st && st.message) || "Sincronizzazione in corso...";
+          if (!pollTimer) {
+            pollTimer = setInterval(checkStatus, 1200);
+          }
+        })
+        .catch(function () {
+          btn.disabled = false;
+          btn.textContent = "🔄 Sincronizza Ora";
+          badge.className = "sync-status-badge status-worsening";
+          badge.textContent = "Errore di rete locale";
+        });
+    });
+  }
+
+  function initDailyTagsBar() {
+    const card = document.getElementById("daily-tags-card");
+    const pillsWrap = document.getElementById("daily-tags-pills");
+    const form = document.getElementById("custom-tag-form");
+    const input = document.getElementById("custom-tag-input");
+    if (!card || !pillsWrap) return;
+
+    const dayStr = card.getAttribute("data-day");
+    if (!dayStr) return;
+
+    function toggleTagOnServer(tagKey, btnEl) {
+      fetch("/api/day/" + encodeURIComponent(dayStr) + "/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tag: tagKey })
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (!res || !Array.isArray(res.tags)) return;
+          const activeSet = new Set(res.tags);
+          if (btnEl) {
+            const isNowOn = activeSet.has(tagKey);
+            btnEl.classList.toggle("active", isNowOn);
+            btnEl.setAttribute("aria-pressed", isNowOn ? "true" : "false");
+          } else {
+            window.location.reload();
+          }
+        })
+        .catch(function () {});
+    }
+
+    pillsWrap.querySelectorAll(".js-tag-toggle").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const tKey = btn.getAttribute("data-tag");
+        if (tKey) toggleTagOnServer(tKey, btn);
+      });
+    });
+
+    if (form && input) {
+      form.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        const rawVal = (input.value || "").trim().toLowerCase().replace(/\s+/g, "_");
+        if (!rawVal) return;
+        input.value = "";
+        toggleTagOnServer(rawVal, null);
+      });
+    }
+  }
+
   /* ========================================================================
      5. INIZIALIZZAZIONE DOM (Tema Scuro, Mini-Calendario, Formule, Drawer)
      ======================================================================== */
@@ -1346,6 +1639,8 @@
 
     // Inizializza il mini-calendario dei giorni disponibili
     initMiniCalendar();
+    initSyncNowButton();
+    initDailyTagsBar();
 
     // Renderizza tutte le formule LaTeX inline presenti nella pagina (.js-render-latex)
     document.querySelectorAll(".js-render-latex").forEach(function (el) {
@@ -1416,6 +1711,8 @@
     renderWeeklyCycleChart: renderWeeklyCycleChart,
     renderSpearmanHeatmap: renderSpearmanHeatmap,
     renderCorrelationScatter: renderCorrelationScatter,
+    renderActivityTimeseriesChart: renderActivityTimeseriesChart,
+    renderTagImpactsChart: renderTagImpactsChart,
     basePlotlyLayout: basePlotlyLayout
   };
 })();

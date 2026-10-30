@@ -23,7 +23,7 @@ from typing import Any
 
 import numpy as np
 
-from app.db import replace_daily, upsert_activity, upsert_raw
+from app.db import replace_daily, toggle_day_tag, upsert_activity, upsert_raw
 
 DEFAULT_DAYS = 90
 DEFAULT_SEED = 42
@@ -499,8 +499,22 @@ def seed_synthetic_db(
     )
     conn.execute("DELETE FROM activities;")
     conn.execute("DELETE FROM daily;")
+    conn.execute("DELETE FROM daily_tags;")
     for r in daily_rows:
         replace_daily(conn, r)
+        # Inserisce tag contestuali sintetici realistici correlati con HRV/stress/sonno
+        day_str = str(r["day"])
+        hrv_v = r.get("hrv_night_ms")
+        stress_v = r.get("stress_avg")
+        sleep_v = r.get("sleep_total_min")
+        if hrv_v is not None and hrv_v < 55.0:
+            toggle_day_tag(conn, day_str, "cena_tardi", force_add=True)
+        if stress_v is not None and stress_v >= 37.0:
+            toggle_day_tag(conn, day_str, "studio_esame", force_add=True)
+        if sleep_v is not None and sleep_v < 400.0:
+            toggle_day_tag(conn, day_str, "caffeina_tardi", force_add=True)
+        if hrv_v is not None and hrv_v < 51.0 and (stress_v or 0) > 34.0:
+            toggle_day_tag(conn, day_str, "alcol", force_add=True)
         if populate_raw_series:
             d_obj = date.fromisoformat(r["day"])
             sleep_raw = generate_synthetic_sleep_raw(d_obj, r, seed=seed)

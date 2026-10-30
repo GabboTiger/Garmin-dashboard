@@ -964,3 +964,114 @@ def simulate_future_load(
     )
 
 
+def extract_activity_chart_series(
+    details_payload: dict[str, Any] | None,
+    max_points: int = 450,
+) -> dict[str, Any]:
+    """Estrae e sottocampiona la serie temporale ad alta risoluzione di un'attività
+    per la visualizzazione grafica interattiva nel pannello laterale:
+    - `elapsed_min`: tempo trascorso in minuti
+    - `hr_bpm`: frequenza cardiaca [bpm]
+    - `speed_kmh`: velocità istantanea [km/h]
+    - `half1_hr_mean`, `half2_hr_mean`, `mid_elapsed_min`: riferimenti per la deriva FC
+    - `hrr_markers`: fino a 3 finestre chiave di recupero FC (post-esercizio o intra-seduta)
+    """
+    samples = extract_activity_timeseries(details_payload)
+    if len(samples) < 5:
+        return {
+            "available": False,
+            "n_raw_samples": len(samples),
+            "elapsed_min": [],
+            "hr_bpm": [],
+            "speed_kmh": [],
+            "half1_hr_mean": None,
+            "half2_hr_mean": None,
+            "mid_elapsed_min": None,
+            "hrr_markers": [],
+        }
+
+    # Sottocampionamento uniforme se il numero di punti supera max_points
+    step = max(1, math.ceil(len(samples) / max(1, max_points)))
+    sub = samples[::step]
+    if samples[-1] is not sub[-1]:
+        sub.append(samples[-1])
+
+    elapsed_min = [round(s["elapsed_s"] / 60.0, 2) for s in sub]
+    hr_bpm = [round(s["hr"], 1) for s in sub]
+    speed_kmh = [round(s["speed_mps"] * 3.6, 2) for s in sub]
+
+    # Calcolo medie 1ª e 2ª metà per riferimento visivo deriva FC
+    mid_idx = len(samples) // 2
+    half1_hr_mean = round(float(np.mean([s["hr"] for s in samples[:mid_idx]])), 1)
+    half2_hr_mean = round(float(np.mean([s["hr"] for s in samples[mid_idx:]])), 1)
+    mid_elapsed_min = round(samples[mid_idx]["elapsed_s"] / 60.0, 2)
+
+    # Ricerca marker di recupero FC (fine esercizio o pause intra-seduta più evidenti)
+    hrr_markers: list[dict[str, Any]] = []
+    active_indices = [i for i, s in enumerate(samples) if s["speed_mps"] > 0.35]
+    if active_indices:
+        end_idx = active_indices[-1]
+        t_end = samples[end_idx]["elapsed_s"]
+        post_s = samples[-1]["elapsed_s"] - t_end
+        if post_s >= 55.0:
+            c60 = [x for x in samples[end_idx:] if abs((x["elapsed_s"] - t_end) - 60.0) <= 15.0]
+            if c60:
+                b60 = min(c60, key=lambda x: abs((x["elapsed_s"] - t_end) - 60.0))
+                drop = round(samples[end_idx]["hr"] - b60["hr"], 1)
+                if drop > 2.0:
+                    hrr_markers.append(
+                        {
+                            "peak_min": round(t_end / 60.0, 2),
+                            "peak_hr": round(samples[end_idx]["hr"], 1),
+                            "rec_min": round(b60["elapsed_s"] / 60.0, 2),
+                            "rec_hr": round(b60["hr"], 1),
+                            "drop_bpm": drop,
+                            "label": f"HRR60 finale: -{drop:.0f} bpm",
+                        }
+                    )
+
+    if not hrr_markers:
+        mean_hr_all = float(np.mean([s["hr"] for s in samples]))
+        peak_thr = max(135.0, mean_hr_all + 8.0)
+        candidates_intra: list[dict[str, Any]] = []
+        last_t0 = -999.0
+        for idx_s, s_pt in enumerate(samples):
+            t0 = s_pt["elapsed_s"]
+            if t0 - last_t0 < 120.0:
+                continue
+            if s_pt["hr"] >= peak_thr and s_pt["speed_mps"] > 0.35:
+                w45 = [x for x in samples[idx_s + 1 :] if 0.0 < (x["elapsed_s"] - t0) <= 45.0]
+                if len(w45) >= 3 and (sum(x["speed_mps"] for x in w45) / len(w45)) < 0.80:
+                    c60 = [x for x in samples[idx_s + 1 :] if abs((x["elapsed_s"] - t0) - 60.0) <= 15.0]
+                    if c60:
+                        b60 = min(c60, key=lambda x: abs((x["elapsed_s"] - t0) - 60.0))
+                        drop = round(s_pt["hr"] - b60["hr"], 1)
+                        if drop >= 8.0:
+                            candidates_intra.append(
+                                {
+                                    "peak_min": round(t0 / 60.0, 2),
+                                    "peak_hr": round(s_pt["hr"], 1),
+                                    "rec_min": round(b60["elapsed_s"] / 60.0, 2),
+                                    "rec_hr": round(b60["hr"], 1),
+                                    "drop_bpm": drop,
+                                    "label": f"Pausa 60s: -{drop:.0f} bpm",
+                                }
+                            )
+                            last_t0 = t0
+        candidates_intra.sort(key=lambda m: m["drop_bpm"], reverse=True)
+        hrr_markers = candidates_intra[:3]
+
+    return {
+        "available": True,
+        "n_raw_samples": len(samples),
+        "elapsed_min": elapsed_min,
+        "hr_bpm": hr_bpm,
+        "speed_kmh": speed_kmh,
+        "half1_hr_mean": half1_hr_mean,
+        "half2_hr_mean": half2_hr_mean,
+        "mid_elapsed_min": mid_elapsed_min,
+        "hrr_markers": hrr_markers,
+    }
+
+
+

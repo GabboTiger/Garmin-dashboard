@@ -123,6 +123,7 @@ def sync_garmin_data(
     force_all: bool = False,
     include_extended: bool = True,
     fetch_activity_details: bool = True,
+    progress_cb: Any | None = None,
 ) -> dict[str, Any]:
     """Esegue la sincronizzazione incrementale e idempotente per gli ultimi `days` giorni.
     Scarica i dettagli delle attività (`activity_details:<id>` e `activity_hr_zones:<id>`)
@@ -142,12 +143,16 @@ def sync_garmin_data(
         len(to_fetch),
         days,
     )
+    if callable(progress_cb):
+        progress_cb(f"Controllo {len(to_fetch)} giorni da aggiornare...")
 
     errors = 0
     days_synced = 0
 
-    for d_str in to_fetch:
+    for idx_d, d_str in enumerate(to_fetch, start=1):
         try:
+            if callable(progress_cb):
+                progress_cb(f"Download giorno {d_str} ({idx_d}/{len(to_fetch)})...")
             bundle = client.fetch_day_bundle(d_str, include_extended=include_extended)
             for ep_name, payload in bundle.items():
                 if payload is not None:
@@ -167,10 +172,12 @@ def sync_garmin_data(
     activities_saved = 0
     details_fetched = 0
     try:
+        if callable(progress_cb):
+            progress_cb("Download elenco attività e serie 1s mancanti...")
         raw_activities = client.fetch_activities_list(start_str, end_str)
         db.upsert_raw(conn, end_str, "activities_range", raw_activities)
 
-        for item in raw_activities:
+        for idx_a, item in enumerate(raw_activities, start=1):
             act_id = item.get("activityId")
             start_local = str(item.get("startTimeLocal") or "")
             act_day = start_local[:10] if len(start_local) >= 10 else end_str
@@ -188,10 +195,13 @@ def sync_garmin_data(
                 if fetch_activity_details:
                     details_ep = f"activity_details:{act_id}"
                     if force_all or not db.has_raw(conn, details_ep):
+                        if callable(progress_cb):
+                            progress_cb(f"Scarico serie 1s attività {idx_a}/{len(raw_activities)} ({act_day})...")
                         details_payload = client.fetch_activity_details(act_id)
                         if details_payload is not None:
                             db.upsert_raw(conn, act_day, details_ep, details_payload)
                             details_fetched += 1
+                            conn.commit()
 
             parsed_act = parsers.parse_activity_payload(item, hr_zones_payload=zones_payload)
             if parsed_act is not None:

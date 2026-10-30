@@ -76,3 +76,4 @@ def test_nocturnal_physiology_spo2_threshold_and_sleep_debt() -> None:
     assert val["spo2_below_threshold_min"] is not None and val["spo2_below_threshold_min"] > 0.0
     assert val["sleep_debt_7d_min"] is not None and val["sleep_debt_7d_min"] >= 0.0
     assert val["sleep_debt_14d_hours"] is not None
+

@@ -1191,3 +1191,41 @@ button.quality-pill:hover {
   font-size: 15px;
   color: var(--color-strain);
 }
+
+/* ==========================================================================
+   PULSANTE SINCRONIZZA ORA & DIARIO TAG GIORNALIERI
+   ========================================================================== */
+.btn-sync-now {
+  border-color: rgba(45, 212, 191, 0.38);
+  color: #2DD4BF;
+}
+
+.btn-sync-now:hover:not(:disabled) {
+  background: rgba(45, 212, 191, 0.14);
+  border-color: #2DD4BF;
+  color: #2DD4BF;
+}
+
+.btn-sync-now:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.sync-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--border-card);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+}
+
+.js-tag-toggle.active {
+  background: rgba(129, 140, 248, 0.18);
+  border-color: #818CF8;
+  color: #C7D2FE;
+}
+

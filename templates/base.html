@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Garmin Personal Dashboard{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css', v='7') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css', v='8') }}">
   <script src="{{ url_for('static', filename='vendor/plotly.min.js') }}"></script>
 </head>
 <body>
@@ -20,6 +20,16 @@
         </div>
 
         <div class="header-controls">
+          <button
+            type="button"
+            id="sync-now-btn"
+            class="btn-pill btn-sync-now"
+            title="Sincronizza ora gli ultimi 30 giorni e le serie 1s mancanti"
+          >
+            🔄 Sincronizza Ora
+          </button>
+          <span id="sync-status-badge" class="sync-status-badge" style="display: none;"></span>
+
           <a class="btn-pill" href="{{ url_for('export_daily_csv') }}" title="Scarica dati giornalieri in CSV">
             ⬇ CSV Giornaliero
           </a>
@@ -150,6 +160,16 @@
       <div id="drawer-kpi-grid" class="drawer-kpi-grid"></div>
     </div>
 
+    <!-- Strato 2A-bis: Tracciato Secondo-per-Secondo FC & Velocità (visibile per le attività) -->
+    <div id="drawer-timeseries-section" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-2);">
+        <span class="card-label" style="color: var(--color-strain);">📈 Tracciato Seduta ad Alta Risoluzione (FC &amp; Velocità + Pause HRR)</span>
+        <span id="drawer-timeseries-badge" class="quality-pill">1s</span>
+      </div>
+      <div id="drawer-activity-chart" class="chart-box" style="height: 255px;"></div>
+      <div id="drawer-timeseries-note" class="card-subtitle" style="margin-top: 6px;"></div>
+    </div>
+
     <!-- Strato 2B: Barre delle 5 Zone FC (visibile per le attività) -->
     <div id="drawer-zones-section" style="display: none;">
       <div class="card-label" style="margin-bottom: var(--space-2);">Distribuzione Tempo nelle 5 Zone Cardiache (Z1–Z5)</div>
@@ -179,7 +199,7 @@
     </div>
   </aside>
 
-  <script src="{{ url_for('static', filename='js/dashboard.js', v='7') }}"></script>
+  <script src="{{ url_for('static', filename='js/dashboard.js', v='8') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

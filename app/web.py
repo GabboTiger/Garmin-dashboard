@@ -6,7 +6,8 @@ import csv
 import io
 import os
 import sys
-from datetime import date, timedelta
+import threading
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,8 @@ if __package__ in (None, ""):
 from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, render_template, request
 
-from app import analysis, baselines, db, scores, synthetic
+from app import analysis, baselines, db, scores, sync, synthetic
+from app.garmin_client import GarminRateLimiter, SafeGarminClient
 
 METRIC_META: dict[str, dict[str, str]] = {
     "hrv_night_ms": {"label": "HRV Notturna", "unit": "ms", "color_var": "--color-recovery"},
@@ -422,6 +424,14 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Ricorda sempre: correlazione esplorativa non dimostra da sola un rapporto di causa-effetto."
         ),
     },
+    "Diario Contestuale (Tag Giornalieri)": {
+        "area": "Statistica & Trend",
+        "short": "Etichette rapide (Studio/Esame, Cena Tardi, Alcol, DOMS, Caffeina, Malessere) per misurare l'effetto delle abitudini extra-sportive su HRV, RHR e Sonno.",
+        "meaning": (
+            "Permette di annotare con 1 clic i fattori di contesto non misurati dall'orologio e confrontare nella pagina Correlazioni "
+            "la differenza mediana di HRV notturna, FC a riposo, Punteggio Sonno e Stress tra i giorni con il tag attivo e quelli senza tag."
+        ),
+    },
 }
 
 
@@ -715,6 +725,8 @@ def _enrich_activities_with_analysis(
         act_item["drift_sub"] = drift_sub
 
         act_item["detail_payload"] = {
+            "activity_id": int(act_id) if act_id is not None else None,
+            "has_details_1s": has_details_1s,
             "title": f"{act.get('name') or type_badge} ({act.get('day')})",
             "display_value": trimp["value"] if trimp["calculable"] else act_item["duration_fmt"],
             "unit": "TRIMP" if trimp["calculable"] else "",
@@ -898,6 +910,7 @@ def create_app(db_path: Path | str | None = None, demo_mode: bool | None = None)
         rhr_by_day = {str(r["day"]): r.get("rhr_bpm") for r in daily_rows}
         sleep_raw = db.get_raw(conn, target_day, "sleep") if target_day else None
         enriched_acts = _enrich_activities_with_analysis(conn, activities, rhr_by_day, limit=12)
+        day_tags = db.get_day_tags(conn, target_day) if target_day else []
         conn.close()
 
         day_scores = scores.compute_all_scores_for_day(daily_rows, activities, target_day) if latest else {}
@@ -925,6 +938,8 @@ def create_app(db_path: Path | str | None = None, demo_mode: bool | None = None)
             bb_recharge=bb_recharge,
             history_30d=history_30d,
             activities=enriched_acts,
+            day_tags=day_tags,
+            preset_tags=analysis.PRESET_TAGS,
         )
 
     @app.get("/sleep")
@@ -1126,6 +1141,7 @@ def create_app(db_path: Path | str | None = None, demo_mode: bool | None = None)
         conn = db.connect(app.config["DB_PATH"])
         daily_rows = db.fetch_daily_range(conn)
         activities = db.fetch_activities_range(conn)
+        tags_by_day = db.fetch_all_tags_by_day(conn)
         conn.close()
 
         _, target_day, prev_day, next_day = _resolve_day_navigation(daily_rows, request.args.get("day"))
@@ -1142,6 +1158,7 @@ def create_app(db_path: Path | str | None = None, demo_mode: bool | None = None)
             metrics=corr_metrics,
             lag_days=lag_days,
         )
+        tag_impacts = analysis.compute_tag_impacts(daily_rows, tags_by_day)
         raw_comp = analysis.compute_completeness(
             daily_rows,
             metrics=("hrv_night_ms", "rhr_bpm", "sleep_total_min", "stress_avg", "bb_max", "steps", "respiration_sleep_brpm", "spo2_sleep_avg_pct"),
@@ -1177,6 +1194,7 @@ def create_app(db_path: Path | str | None = None, demo_mode: bool | None = None)
             total_days=len(daily_rows),
             lag_days=lag_days,
             matrix=matrix,
+            tag_impacts=tag_impacts,
             completeness=completeness,
             metric_meta=METRIC_META,
             scatter_records=records_for_scatter,
@@ -1295,6 +1313,110 @@ def create_app(db_path: Path | str | None = None, demo_mode: bool | None = None)
                 "completeness": analysis.compute_completeness(daily_rows),
             }
         )
+
+    @app.get("/api/activity/<int:activity_id>/timeseries")
+    def api_activity_timeseries(activity_id: int) -> Any:
+        conn = db.connect(app.config["DB_PATH"])
+        details_raw = db.get_raw_by_endpoint(conn, f"activity_details:{activity_id}")
+        conn.close()
+        series = analysis.extract_activity_chart_series(details_raw)
+        series["activity_id"] = activity_id
+        return jsonify(series)
+
+    @app.post("/api/day/<day_str>/tags")
+    def api_toggle_day_tag(day_str: str) -> Any:
+        payload = request.get_json(silent=True) or {}
+        tag_val = str(payload.get("tag") or "").strip()
+        if not tag_val:
+            return jsonify({"error": "tag_missing"}), 400
+        conn = db.connect(app.config["DB_PATH"])
+        active_tags = db.toggle_day_tag(conn, day_str, tag_val)
+        conn.commit()
+        conn.close()
+        return jsonify({"day": day_str, "tags": active_tags})
+
+    sync_lock = threading.Lock()
+    sync_state: dict[str, Any] = {
+        "running": False,
+        "status": "idle",
+        "message": "Pronto",
+        "last_run_at": None,
+        "result": None,
+    }
+
+    def _run_background_sync(days_to_sync: int) -> None:
+        try:
+            if app.config["DEMO_MODE"]:
+                with sync_lock:
+                    sync_state["message"] = "Rigenerazione dataset demo in corso..."
+                c = db.connect(app.config["DB_PATH"])
+                res = synthetic.seed_synthetic_db(c, days=90, seed=42)
+                c.close()
+                with sync_lock:
+                    sync_state["running"] = False
+                    sync_state["status"] = "ok"
+                    sync_state["message"] = f"Demo aggiornata ({res['daily_days']}g, {res['activities']} att.)"
+                    sync_state["last_run_at"] = datetime.now(timezone.utc).isoformat()
+                    sync_state["result"] = res
+                return
+
+            def _update_msg(msg: str) -> None:
+                with sync_lock:
+                    sync_state["message"] = msg
+
+            _update_msg("Autenticazione token Garmin...")
+            limiter = GarminRateLimiter(min_delay_s=1.2, max_requests=140)
+            client = SafeGarminClient(rate_limiter=limiter)
+            client.login(interactive=False)
+
+            c = db.connect(app.config["DB_PATH"])
+            res = sync.sync_garmin_data(
+                c,
+                client,
+                days=days_to_sync,
+                progress_cb=_update_msg,
+            )
+            c.close()
+            with sync_lock:
+                sync_state["running"] = False
+                sync_state["status"] = res.get("status", "ok")
+                sync_state["message"] = (
+                    f"Completato: {res['days_synced']}g, {res['activities_synced']} att. "
+                    f"(+{res.get('activity_details_fetched', 0)} serie 1s)"
+                )
+                sync_state["last_run_at"] = datetime.now(timezone.utc).isoformat()
+                sync_state["result"] = res
+        except Exception as exc:
+            with sync_lock:
+                sync_state["running"] = False
+                sync_state["status"] = "error"
+                sync_state["message"] = f"Errore sync: {exc}"
+
+    @app.post("/api/sync/start")
+    def api_sync_start() -> Any:
+        payload = request.get_json(silent=True) or {}
+        try:
+            days_req = int(payload.get("days", 30))
+        except (ValueError, TypeError):
+            days_req = 30
+        days_req = max(1, min(90, days_req))
+
+        with sync_lock:
+            if sync_state["running"]:
+                return jsonify(sync_state), 409
+            sync_state["running"] = True
+            sync_state["status"] = "running"
+            sync_state["message"] = "Avvio sincronizzazione..."
+
+        t = threading.Thread(target=_run_background_sync, args=(days_req,), daemon=True)
+        t.start()
+        with sync_lock:
+            return jsonify(dict(sync_state)), 202
+
+    @app.get("/api/sync/status")
+    def api_sync_status() -> Any:
+        with sync_lock:
+            return jsonify(dict(sync_state))
 
     return app
 

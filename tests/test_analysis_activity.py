@@ -174,3 +174,25 @@ def test_foster_monotony_strain_and_whatif_simulator() -> None:
     assert sim_overload["value"]["simulated_monotony"] == 4.0
 
 
+def test_extract_activity_chart_series_downsamples_and_detects_hrr() -> None:
+    """Verifica l'estrazione del tracciato secondo-per-secondo (Idea 2) per il pannello laterale."""
+    details = synthetic.generate_synthetic_activity_details(
+        activity_id=777,
+        day_date=date(2026, 10, 30),
+        duration_s=2700.0,
+        hr_avg=152.0,
+        speed_mps=3.2,
+        include_post_recovery=True,
+        seed=42,
+    )
+    series = activity.extract_activity_chart_series(details, max_points=200)
+    assert series["available"] is True
+    assert series["n_raw_samples"] >= 100
+    assert len(series["elapsed_min"]) <= 202
+    assert len(series["hr_bpm"]) == len(series["elapsed_min"])
+    assert series["half1_hr_mean"] is not None
+    assert series["half2_hr_mean"] is not None
+    assert len(series["hrr_markers"]) >= 1
+
+
+

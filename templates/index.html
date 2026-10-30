@@ -11,6 +11,61 @@
   {{ render_score_ring(scores.sleep, '--color-sleep') }}
 </section>
 
+<!-- 1b. Diario Contestuale del Giorno (Tag Rapidi per Correlazioni Intra-Soggetto) -->
+{% if day %}
+<section
+  class="card"
+  id="daily-tags-card"
+  data-day="{{ day }}"
+  style="margin-top: var(--space-4); padding: var(--space-3) var(--space-4);"
+>
+  <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-3);">
+    <div>
+      <span class="card-label" style="color: var(--color-sleep);">🏷️ Diario Contestuale del Giorno ({{ day }})</span>
+      <div class="card-subtitle">
+        Seleziona con 1 clic i fattori extra-sportivi presenti oggi: il loro effetto su HRV, FC a riposo e Sonno viene calcolato nella pagina <a href="{{ url_for('page_correlations', day=day) }}" style="color: var(--color-recovery); text-decoration: underline;">Correlazioni &amp; Dati</a>.
+      </div>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;" id="daily-tags-pills">
+      {% for pt in (preset_tags or []) %}
+        {% set is_on = pt.key in (day_tags or []) %}
+        <button
+          type="button"
+          class="btn-pill js-tag-toggle {% if is_on %}active{% endif %}"
+          data-tag="{{ pt.key }}"
+          title="{{ pt.desc }}"
+          aria-pressed="{{ 'true' if is_on else 'false' }}"
+        >
+          {{ pt.label }}
+        </button>
+      {% endfor %}
+      {% set preset_keys = (preset_tags or []) | map(attribute='key') | list %}
+      {% for custom_t in (day_tags or []) if custom_t not in preset_keys %}
+        <button
+          type="button"
+          class="btn-pill js-tag-toggle active"
+          data-tag="{{ custom_t }}"
+          aria-pressed="true"
+        >
+          🏷️ {{ custom_t.replace('_', ' ') }}
+        </button>
+      {% endfor %}
+      <form id="custom-tag-form" style="display: inline-flex; gap: 6px; align-items: center; margin: 0;">
+        <input
+          type="text"
+          id="custom-tag-input"
+          class="select-clean"
+          placeholder="+ Tag libero..."
+          maxlength="28"
+          style="width: 125px; padding: 5px 10px; font-size: var(--text-xs);"
+        >
+        <button type="submit" class="btn-pill" style="padding: 5px 10px;">Aggiungi</button>
+      </form>
+    </div>
+  </div>
+</section>
+{% endif %}
+
 <!-- 2. Panoramica Grafica Giornaliera (3 Grafici: Storico Punteggi, HRV con Banda, Body Battery & Stress) -->
 <h2 class="section-title">Panoramica Grafica (ultimi 30 giorni fino a {{ day }})</h2>
 <section class="grid-12">

@@ -95,3 +95,24 @@ def test_multisport_comparison_profiles() -> None:
         assert sp["next_night_hrv_ms"] is not None
 
 
+def test_compute_tag_impacts_detects_hrv_difference() -> None:
+    """Verifica che `compute_tag_impacts` (Idea 5) calcoli lo scostamento mediano su HRV, RHR, Sonno e Stress."""
+    daily_rows, _ = synthetic.generate_synthetic_dataset(
+        days=40,
+        end_date=date(2026, 10, 30),
+        seed=42,
+    )
+    tags_by_day: dict[str, list[str]] = {}
+    for r in daily_rows:
+        if r.get("hrv_night_ms") is not None and float(r["hrv_night_ms"]) < 55.0:
+            tags_by_day[str(r["day"])] = ["cena_tardi"]
+
+    res = recovery_trends.compute_tag_impacts(daily_rows, tags_by_day)
+    assert res["calculable"] is True
+    tags = res["value"]["tags"]
+    assert len(tags) == 1
+    assert tags[0]["tag"] == "cena_tardi"
+    assert tags[0]["hrv_delta_ms"] < -3.0
+
+
+

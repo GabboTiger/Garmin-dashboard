@@ -818,3 +818,126 @@ def compute_multisport_comparison(
         how_it_works=hw,
     )
 
+
+PRESET_TAGS: tuple[dict[str, str], ...] = (
+    {"key": "studio_esame", "label": "📚 Studio / Esame", "desc": "Giornata di studio intenso o sessione d'esame"},
+    {"key": "cena_tardi", "label": "🍕 Cena Tardi", "desc": "Pasto serale pesante o a meno di 2h dal sonno"},
+    {"key": "alcol", "label": "🍺 Alcol", "desc": "Assunzione serale di bevande alcoliche"},
+    {"key": "doms_gambe", "label": "🦵 Gambe Pesanti / DOMS", "desc": "Indolenzimento muscolare o fatica residua"},
+    {"key": "caffeina_tardi", "label": "☕ Caffeina Pomeriggio", "desc": "Caffè o stimolanti dopo le 15:00"},
+    {"key": "malessere", "label": "🤒 Lieve Malessere", "desc": "Raffreddore, allergia o sintomi influenzali"},
+)
+
+
+def compute_tag_impacts(
+    daily_rows: list[dict[str, Any]],
+    tags_by_day: dict[str, list[str]],
+) -> dict[str, Any]:
+    """Calcola la differenza osservata (mediana e media) sulle metriche di recupero
+    (HRV notturna, FC a riposo, Punteggio Sonno, Stress medio) tra i giorni in cui
+    un determinato tag è presente e i giorni senza quel tag.
+
+    Formula:
+      Delta_M(tag) = Mediana(M_{d in tag}) - Mediana(M_{d not in tag})
+
+    Dati minimi e limiti:
+      - Richiede almeno 1 giorno con il tag attivo e almeno 5 giorni senza il tag.
+      - Se un tag ha n < 3 occorrenze viene segnalato come stima preliminare (`quality_flag = "partial"`).
+    """
+    hw = {
+        "title": "Analisi Impatto Tag Giornalieri su Recupero e Sonno",
+        "formula_latex": (
+            r"\Delta M(\text{tag}) = \text{Mediana}\!\left(M_{d \in \text{tag}}\right) - "
+            r"\text{Mediana}\!\left(M_{d \notin \text{tag}}\right)"
+        ),
+        "parameters": {
+            "Metriche confrontate": "HRV notturna (ms), FC a riposo (bpm), Punteggio Sonno (/100), Stress medio (/100)",
+            "Statistica di confronto": "Differenza tra mediane (robusta agli outlier)",
+        },
+        "limits": "Associazione osservazionale non controllata per confondenti multipli nello stesso giorno.",
+    }
+
+    if not daily_rows or not tags_by_day:
+        return make_not_calculable(
+            unit="Δ",
+            reason="Nessun tag giornaliero registrato finora. Aggiungi tag dalla pagina Oggi per analizzarne l'impatto.",
+            n_samples=0,
+            how_it_works=hw,
+        )
+
+    preset_map = {p["key"]: p["label"] for p in PRESET_TAGS}
+    all_tags: set[str] = set()
+    for t_list in tags_by_day.values():
+        for t in t_list:
+            if t:
+                all_tags.add(t)
+
+    if not all_tags:
+        return make_not_calculable(
+            unit="Δ",
+            reason="Nessun tag giornaliero registrato finora.",
+            n_samples=0,
+            how_it_works=hw,
+        )
+
+    metrics_spec = (
+        ("hrv_night_ms", "hrv_delta_ms", "hrv_median_ms"),
+        ("rhr_bpm", "rhr_delta_bpm", "rhr_median_bpm"),
+        ("sleep_score", "sleep_score_delta", "sleep_score_median"),
+        ("stress_avg", "stress_delta", "stress_median"),
+    )
+
+    tag_rows: list[dict[str, Any]] = []
+    for tag_key in sorted(all_tags):
+        tagged_days = {d for d, tl in tags_by_day.items() if tag_key in tl}
+        if not tagged_days:
+            continue
+
+        entry: dict[str, Any] = {
+            "tag": tag_key,
+            "label": preset_map.get(tag_key, f"🏷️ {tag_key.replace('_', ' ').title()}"),
+            "days_count": len(tagged_days),
+            "reliable": len(tagged_days) >= 3,
+        }
+
+        for col, delta_key, med_key in metrics_spec:
+            with_vals = [
+                float(r[col])
+                for r in daily_rows
+                if r.get("day") in tagged_days and r.get(col) is not None
+            ]
+            without_vals = [
+                float(r[col])
+                for r in daily_rows
+                if r.get("day") not in tagged_days and r.get(col) is not None
+            ]
+            if with_vals and len(without_vals) >= 3:
+                med_with = float(np.median(with_vals))
+                med_without = float(np.median(without_vals))
+                entry[med_key] = round(med_with, 1)
+                entry[delta_key] = round(med_with - med_without, 1)
+            else:
+                entry[med_key] = None
+                entry[delta_key] = None
+
+        tag_rows.append(entry)
+
+    tag_rows.sort(key=lambda x: x["days_count"], reverse=True)
+    total_tagged_days = len({d for d, tl in tags_by_day.items() if tl})
+
+    return make_result(
+        value={
+            "tags": tag_rows,
+            "total_tagged_days": total_tagged_days,
+        },
+        unit="Δ",
+        n_samples=total_tagged_days,
+        quality_flag="good" if any(t["reliable"] for t in tag_rows) else "partial",
+        assumptions=[
+            f"Analizzati {len(tag_rows)} tag distinti su {total_tagged_days} giornate taggate.",
+            "I tag con meno di 3 occorrenze sono indicati come stima preliminare.",
+        ],
+        how_it_works=hw,
+    )
+
+

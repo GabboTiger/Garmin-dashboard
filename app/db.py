@@ -88,6 +88,15 @@ CREATE TABLE IF NOT EXISTS sync_log (
     errors INTEGER NOT NULL,
     status TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS daily_tags (
+    day TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (day, tag)
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_tags_day ON daily_tags(day);
 """
 
 DAILY_COLUMNS = (
@@ -334,3 +343,82 @@ def fetch_activities_range(
         params,
     )
     return [dict(r) for r in cur.fetchall()]
+
+
+def get_day_tags(conn: sqlite3.Connection, day: str) -> list[str]:
+    """Restituisce l'elenco ordinato dei tag associati a un giorno."""
+    cur = conn.execute(
+        "SELECT tag FROM daily_tags WHERE day = ? ORDER BY tag ASC",
+        (day,),
+    )
+    return [str(r["tag"]) for r in cur.fetchall()]
+
+
+def fetch_all_tags_by_day(
+    conn: sqlite3.Connection,
+    start_day: str | None = None,
+    end_day: str | None = None,
+) -> dict[str, list[str]]:
+    """Restituisce una mappa {day: [tag1, tag2, ...]} per l'intervallo indicato."""
+    clauses: list[str] = []
+    params: list[Any] = []
+    if start_day is not None:
+        clauses.append("day >= ?")
+        params.append(start_day)
+    if end_day is not None:
+        clauses.append("day <= ?")
+        params.append(end_day)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    cur = conn.execute(
+        f"SELECT day, tag FROM daily_tags {where} ORDER BY day ASC, tag ASC",
+        params,
+    )
+    out: dict[str, list[str]] = {}
+    for r in cur.fetchall():
+        d_str = str(r["day"])
+        out.setdefault(d_str, []).append(str(r["tag"]))
+    return out
+
+
+def toggle_day_tag(
+    conn: sqlite3.Connection,
+    day: str,
+    tag: str,
+    force_add: bool | None = None,
+) -> list[str]:
+    """Attiva o disattiva un tag per una data (o lo aggiunge se force_add=True). Restituisce i tag attivi."""
+    clean_tag = tag.strip().lower().replace(" ", "_")
+    if not clean_tag or not day:
+        return get_day_tags(conn, day)
+
+    cur = conn.execute(
+        "SELECT 1 FROM daily_tags WHERE day = ? AND tag = ?",
+        (day, clean_tag),
+    )
+    exists = cur.fetchone() is not None
+
+    if force_add is True and not exists:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "INSERT INTO daily_tags (day, tag, created_at) VALUES (?, ?, ?)",
+            (day, clean_tag, now_iso),
+        )
+    elif force_add is False and exists:
+        conn.execute(
+            "DELETE FROM daily_tags WHERE day = ? AND tag = ?",
+            (day, clean_tag),
+        )
+    elif force_add is None:
+        if exists:
+            conn.execute(
+                "DELETE FROM daily_tags WHERE day = ? AND tag = ?",
+                (day, clean_tag),
+            )
+        else:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            conn.execute(
+                "INSERT INTO daily_tags (day, tag, created_at) VALUES (?, ?, ?)",
+                (day, clean_tag, now_iso),
+            )
+    return get_day_tags(conn, day)
+

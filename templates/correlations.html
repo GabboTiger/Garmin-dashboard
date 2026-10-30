@@ -109,6 +109,93 @@
   </div>
 </section>
 
+<!-- 2b. Analisi Impatto Tag Giornalieri (Diario Contestuale) -->
+<h2 class="section-title">🏷️ Impatto del Diario Contestuale (Tag Giornalieri su HRV, FC a Riposo, Sonno e Stress)</h2>
+{% if tag_impacts and tag_impacts.calculable %}
+<section class="grid-12" style="margin-bottom: var(--space-6);">
+  <article class="card col-5">
+    <div class="card-header">
+      <div>
+        <span class="card-label" style="color: var(--color-recovery);">Scostamento Mediano HRV &amp; RHR per Tag</span>
+        <div class="card-subtitle">Differenza osservata nei giorni con il tag rispetto ai giorni senza tag</div>
+      </div>
+      <span class="quality-pill">{{ tag_impacts.value.total_tagged_days }}g taggati</span>
+    </div>
+    <div id="correlations-tags-chart" class="chart-box" style="height: 255px;"></div>
+  </article>
+
+  <article class="card col-7">
+    <div class="card-header">
+      <div>
+        <span class="card-label" style="color: var(--color-sleep);">Tabella Comparativa Fattori Extra-Sportivi</span>
+        <div class="card-subtitle">Mediana nei giorni con tag e variazione Δ rispetto al resto dell'archivio</div>
+      </div>
+      <a class="btn-pill" href="{{ url_for('index', day=day) }}">+ Aggiungi Tag Oggi</a>
+    </div>
+    <div class="table-wrap">
+      <table class="table-clean">
+        <thead>
+          <tr>
+            <th>Tag Contestuale</th>
+            <th>Giorni (n)</th>
+            <th>Δ HRV Notte</th>
+            <th>Δ FC Riposo</th>
+            <th>Δ Score Sonno</th>
+            <th>Δ Stress</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tr in tag_impacts.value.tags %}
+          <tr>
+            <td>
+              <strong>{{ tr.label }}</strong>
+              {% if not tr.reliable %}<div style="font-size: 10px; color: var(--text-muted);">stima preliminare (n &lt; 3)</div>{% endif %}
+            </td>
+            <td>n = {{ tr.days_count }}</td>
+            <td>
+              {% if tr.hrv_delta_ms is not none %}
+                <span class="baseline-status-pill {% if tr.hrv_delta_ms >= 1.5 %}status-improving{% elif tr.hrv_delta_ms <= -1.5 %}status-worsening{% else %}status-in_line{% endif %}">
+                  {{ '+' if tr.hrv_delta_ms > 0 else '' }}{{ tr.hrv_delta_ms }} ms
+                </span>
+                <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">med {{ tr.hrv_median_ms }} ms</div>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if tr.rhr_delta_bpm is not none %}
+                <span class="baseline-status-pill {% if tr.rhr_delta_bpm <= -1.0 %}status-improving{% elif tr.rhr_delta_bpm >= 1.0 %}status-worsening{% else %}status-in_line{% endif %}">
+                  {{ '+' if tr.rhr_delta_bpm > 0 else '' }}{{ tr.rhr_delta_bpm }} bpm
+                </span>
+                <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">med {{ tr.rhr_median_bpm }} bpm</div>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if tr.sleep_score_delta is not none %}
+                <strong>{{ '+' if tr.sleep_score_delta > 0 else '' }}{{ tr.sleep_score_delta }} pt</strong>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if tr.stress_delta is not none %}
+                <strong>{{ '+' if tr.stress_delta > 0 else '' }}{{ tr.stress_delta }} pt</strong>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</section>
+{% else %}
+<section class="card" style="margin-bottom: var(--space-6);">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3);">
+    <p class="card-subtitle" style="margin: 0;">
+      {{ tag_impacts.reason if tag_impacts else "Nessun tag giornaliero registrato." }}
+    </p>
+    <a class="btn-pill" href="{{ url_for('index', day=day) }}">🏷️ Vai a Oggi per taggare le giornate</a>
+  </div>
+</section>
+{% endif %}
+
 <!-- 3. Qualità e Completezza dei Dati per Metrica + Esportazione CSV -->
 <div class="toolbar-row">
   <div>
@@ -172,8 +259,12 @@
     var scatterRecords = {{ (scatter_records or []) | tojson }};
     var lagDays = {{ lag_days }};
     var completeness = {{ (completeness or []) | tojson }};
+    var tagImpacts = {{ (tag_impacts.value.tags if tag_impacts and tag_impacts.calculable else []) | tojson }};
 
     window.GarminDashboardUI.renderSpearmanHeatmap("corr-heatmap-chart", matrixData, metricMeta);
+    if (tagImpacts && tagImpacts.length > 0 && window.GarminDashboardUI.renderTagImpactsChart) {
+      window.GarminDashboardUI.renderTagImpactsChart("correlations-tags-chart", tagImpacts);
+    }
 
     var selX = document.getElementById("corr-select-x");
     var selY = document.getElementById("corr-select-y");

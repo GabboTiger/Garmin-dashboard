@@ -87,6 +87,23 @@ def test_web_routes_and_json_detail_attributes(tmp_path: Path) -> None:
     assert '"kpis":' in html.unescape(acts_html)
     assert '"zones_bars":' in html.unescape(acts_html)
 
+    # Verifica API Fase 6B: toggle tag giornaliero, tracciato 1s attività e stato sync
+    tag_resp = client.post("/api/day/2026-10-30/tags", json={"tag": "studio_esame"})
+    assert tag_resp.status_code == 200
+    assert "studio_esame" in tag_resp.get_json()["tags"]
+
+    ts_resp = client.get("/api/activity/100001/timeseries")
+    assert ts_resp.status_code == 200
+    ts_payload = ts_resp.get_json()
+    assert ts_payload["activity_id"] == 100001
+    assert ts_payload["available"] is True
+    assert len(ts_payload["hr_bpm"]) > 10
+
+    sync_st = client.get("/api/sync/status")
+    assert sync_st.status_code == 200
+    assert "status" in sync_st.get_json()
+
+
 
 def test_spo2_iso_timestamp_from_real_garmin() -> None:
     """Verifica che `compute_nocturnal_physiology_and_debt` gestisca `epochTimestamp` sia come

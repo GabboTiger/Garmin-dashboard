@@ -91,3 +91,23 @@ def test_activities_upsert_idempotent(tmp_path: Path) -> None:
     assert acts[0]["z1_s"] is None
     conn.close()
 
+
+def test_daily_tags_toggle_and_fetch(tmp_path: Path) -> None:
+    conn = db.connect(tmp_path / "test.db")
+    db.init_db(conn)
+
+    t1 = db.toggle_day_tag(conn, "2026-10-29", "Studio Esame")
+    assert t1 == ["studio_esame"]
+
+    t2 = db.toggle_day_tag(conn, "2026-10-29", "cena_tardi")
+    assert t2 == ["cena_tardi", "studio_esame"]
+
+    # Secondo toggle dello stesso tag lo rimuove
+    t3 = db.toggle_day_tag(conn, "2026-10-29", "studio_esame")
+    assert t3 == ["cena_tardi"]
+
+    all_map = db.fetch_all_tags_by_day(conn)
+    assert all_map == {"2026-10-29": ["cena_tardi"]}
+    conn.close()
+
+

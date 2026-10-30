@@ -44,13 +44,20 @@ CREATE TABLE IF NOT EXISTS daily (
     sleep_end_local TEXT,
     rhr_bpm REAL,
     hrv_night_ms REAL,
+    hrv_night_sd_ms REAL,
     stress_avg REAL,
     bb_max REAL,
     bb_min REAL,
     bb_charged REAL,
+    bb_drained REAL,
     steps INTEGER,
     calories_active REAL,
-    intensity_min REAL
+    intensity_min REAL,
+    respiration_sleep_brpm REAL,
+    respiration_day_brpm REAL,
+    spo2_sleep_avg_pct REAL,
+    spo2_sleep_min_pct REAL,
+    training_readiness_score REAL
 );
 
 CREATE TABLE IF NOT EXISTS activities (
@@ -95,13 +102,20 @@ DAILY_COLUMNS = (
     "sleep_end_local",
     "rhr_bpm",
     "hrv_night_ms",
+    "hrv_night_sd_ms",
     "stress_avg",
     "bb_max",
     "bb_min",
     "bb_charged",
+    "bb_drained",
     "steps",
     "calories_active",
     "intensity_min",
+    "respiration_sleep_brpm",
+    "respiration_day_brpm",
+    "spo2_sleep_avg_pct",
+    "spo2_sleep_min_pct",
+    "training_readiness_score",
 )
 
 ACTIVITY_COLUMNS = (
@@ -135,9 +149,30 @@ def connect(db_path: Path | str | None = None) -> sqlite3.Connection:
 
 
 def init_db(conn: sqlite3.Connection) -> None:
-    """Crea le tabelle se non esistono."""
+    """Crea le tabelle se non esistono e applica migrazioni additive sulle colonne mancanti."""
     conn.executescript(SCHEMA_SQL)
+    cur = conn.execute("PRAGMA table_info(daily)")
+    existing_cols = {row["name"] for row in cur.fetchall()}
+    for col in DAILY_COLUMNS:
+        if col not in existing_cols:
+            col_type = "INTEGER" if col == "steps" else "REAL"
+            conn.execute(f"ALTER TABLE daily ADD COLUMN {col} {col_type};")
     conn.commit()
+
+
+def has_raw(conn: sqlite3.Connection, endpoint: str, day: str | None = None) -> bool:
+    """Verifica se un endpoint (es. 'activity_details:12345') è già salvato nella cache raw_garmin."""
+    if day is not None:
+        cur = conn.execute(
+            "SELECT 1 FROM raw_garmin WHERE day = ? AND endpoint = ? LIMIT 1",
+            (day, endpoint),
+        )
+    else:
+        cur = conn.execute(
+            "SELECT 1 FROM raw_garmin WHERE endpoint = ? LIMIT 1",
+            (endpoint,),
+        )
+    return cur.fetchone() is not None
 
 
 def upsert_raw(
@@ -168,6 +203,18 @@ def get_raw(conn: sqlite3.Connection, day: str, endpoint: str) -> Any | None:
     cur = conn.execute(
         "SELECT payload_json FROM raw_garmin WHERE day = ? AND endpoint = ?",
         (day, endpoint),
+    )
+    row = cur.fetchone()
+    if row is None:
+        return None
+    return json.loads(row["payload_json"])
+
+
+def get_raw_by_endpoint(conn: sqlite3.Connection, endpoint: str) -> Any | None:
+    """Restituisce il payload JSON più recente per un dato `endpoint` (utile per `activity_details:<id>`)."""
+    cur = conn.execute(
+        "SELECT payload_json FROM raw_garmin WHERE endpoint = ? ORDER BY day DESC LIMIT 1",
+        (endpoint,),
     )
     row = cur.fetchone()
     if row is None:
@@ -287,4 +334,3 @@ def fetch_activities_range(
         params,
     )
     return [dict(r) for r in cur.fetchall()]
-

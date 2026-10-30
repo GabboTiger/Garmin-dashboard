@@ -165,3 +165,67 @@ costruire le pagine. Le pagine della Fase 4 usano solo questi componenti.
 
 INIZIA ORA dalla Fase 0: leggi la documentazione di python-garminconnect, poi
 scrivi il piano e le domande aperte, e aspetta il mio ok.
+
+STEP 2
+AGGIORNAMENTO DEL PROGETTO: ANALISI AVANZATE ALGORITMICHE
+Questa è un'estensione del piano esistente. Prima di scrivere codice, aggiorna il
+piano con le fasi nuove qui sotto e aspetta il mio ok. Valgono tutte le regole di
+lavoro già date (una fase alla volta, test, stop a fine fase, niente campi
+inventati). Niente LLM: tutto deterministico.
+
+DATI DA AGGIUNGERE ALLA SINCRONIZZAZIONE
+Verifica quali di questi sono davvero disponibili nel mio account e salva le
+risposte grezze nella cache raw: serie temporali di ogni attività
+(get_activity_details), tempo nelle zone (get_activity_hr_in_timezones), battito
+della giornata (get_heart_rates), sonno con le fasi (get_sleep_data), HRV
+(get_hrv_data), respirazione, SpO2, body battery, training readiness.
+- Ispeziona le risposte reali e dimmi risoluzione temporale e campi disponibili
+  per ciascuna. Non assumere né inventare nulla.
+- Scarica i dettagli delle attività solo per quelle non già in cache, con pause
+  tra le chiamate.
+
+ANALISI DA IMPLEMENTARE (funzioni pure in app/analysis/, ognuna con docstring
+che descrive formula, parametri, dati minimi e limiti)
+Attività: recupero della FC a 60 s e 120 s dopo la fine (con flag di qualità e
+"non calcolabile" se la risoluzione o il defaticamento non lo permettono); tempo
+per zona e distribuzione settimanale; TRIMP; carico acuto/cronico con medie
+esponenziali a 7 e 28 giorni e modello fitness/fatica; deriva cardiaca su sedute
+costanti di almeno 30 minuti; efficienza velocità/FC.
+Sonno: latenza, risvegli, efficienza, percentuali per fase, tempo al primo
+profondo e REM, cicli stimati, ipnogramma; regolarità (variabilità degli orari,
+metà del sonno, differenza feriali/weekend, indice di regolarità); FC minima
+notturna e suo orario; HRV e respirazione durante la notte; tempo sotto soglia
+SpO2 configurabile; debito di sonno rispetto a un fabbisogno personale
+configurabile.
+Recupero e tendenze: banda HRV (ln rMSSD, media a 7 giorni contro media ± k·SD a
+60 giorni, k configurabile) e coefficiente di variazione; per ogni metrica media
+mobile, EWMA, pendenza Theil-Sen con test di Mann-Kendall, punti di cambio con
+CUSUM, anomalie con z robusto, ciclo settimanale; ricarica notturna del body
+battery; effetto di sedute dure e facili sul recupero della notte successiva con
+intervallo bootstrap e numero di eventi.
+
+REGOLE DI QUALITÀ
+- Ogni risultato riporta n di campioni o giorni, un flag di qualità e le
+  assunzioni usate. Con dati insufficienti restituisci "non calcolabile" e il
+  motivo, mai un numero.
+- Parametri (zone FC, fabbisogno di sonno, k della banda HRV, soglia SpO2,
+  costanti TRIMP) in un file di configurazione unico con valori di default
+  commentati.
+- Ogni metrica ha nell'interfaccia un pannello "come si calcola" con formula,
+  parametri e limiti. Avviso fisso: stime da dispositivo da polso, non indicazioni
+  mediche.
+
+ESTENSIONE DEI DATI SINTETICI E DEI TEST
+Il generatore sintetico produce anche serie di FC durante e dopo le attività e
+ipnogrammi, con segnali noti inseriti apposta (un recupero FC noto, una deriva
+cardiaca nota, un calo di HRV dopo sedute dure). I test verificano che le funzioni
+li ritrovino entro una tolleranza dichiarata.
+
+FASI NUOVE (dopo la Fase 2 del piano)
+Fase 2b - Sincronizzazione dei dati aggiuntivi, ispezione e parser.
+Fase 3b - Analisi Attività (HRR, zone, TRIMP, carichi) con test.
+Fase 3c - Analisi Sonno (architettura, regolarità, fisiologia notturna) con test.
+Fase 3d - Banda HRV, trend, analisi evento allenamento→recupero, con test.
+Le pagine Attività, Sonno, Recupero, Tendenze e Correlazioni mostrano poi queste
+metriche (grafici, valore, qualità, "come si calcola").
+Per ora dammi solo il piano aggiornato e le domande aperte.

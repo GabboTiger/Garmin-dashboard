@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TOKEN_DIR = Path("data/tokens")
 DEFAULT_DELAY_SECONDS = 1.5
-DEFAULT_MAX_REQUESTS = 180
+DEFAULT_MAX_REQUESTS = 350
 
 
 def get_token_dir() -> Path:
@@ -169,7 +169,13 @@ class SafeGarminClient:
                     logger.error("Errore 429 (Troppe richieste) su %s dopo %d tentativi.", endpoint_label, attempt)
                     raise
                 backoff = 10.0 * (2 ** (attempt - 1))
-                logger.warning("Rate limit (429) su %s: attendo %.1f s (tentativo %d/%d)", endpoint_label, backoff, attempt, max_attempts)
+                logger.warning(
+                    "Rate limit (429) su %s: attendo %.1f s (tentativo %d/%d)",
+                    endpoint_label,
+                    backoff,
+                    attempt,
+                    max_attempts,
+                )
                 self.rate_limiter.sleep_fn(backoff)
             except GarminConnectConnectionError as exc:
                 if attempt == max_attempts:
@@ -179,24 +185,45 @@ class SafeGarminClient:
                 logger.warning("Errore di rete temporaneo su %s: riprovo tra %.1f s", endpoint_label, backoff)
                 self.rate_limiter.sleep_fn(backoff)
 
-    def fetch_day_bundle(self, day_str: str) -> dict[str, Any]:
-        """Scarica i 3 payload giornalieri principali per `day_str` ('YYYY-MM-DD'):
-        - summary: riepilogo giornaliero (passi, RHR, stress, Body Battery, calorie, minuti intensità)
-        - sleep: sonno dettagliato (durata, fasi, punteggio, orari, più eventuale ipnogramma)
-        - hrv: variabilità cardiaca notturna
+    def fetch_day_bundle(self, day_str: str, include_extended: bool = True) -> dict[str, Any]:
+        """Scarica i payload giornalieri per `day_str` ('YYYY-MM-DD'):
+        Base:
+          - summary: riepilogo giornaliero (passi, RHR, stress, Body Battery, calorie, minuti intensità)
+          - sleep: sonno dettagliato con fasi, ipnogramma e serie notturne (se presenti)
+          - hrv: variabilità cardiaca notturna + letture ogni 5 min
+        Estesi (Step 2):
+          - heart_rates: serie temporale del battito cardiaco della giornata
+          - respiration: respirazione diurna/notturna
+          - spo2: saturazione di ossigeno (SpO2)
+          - body_battery: serie temporale ed eventi Body Battery
+          - training_readiness: prontezza all'allenamento (se supportato dal dispositivo)
         """
         if self._api is None:
             raise RuntimeError("Client non autenticato: chiama prima login().")
 
+        endpoints: list[tuple[str, Callable[..., Any] | None, tuple[Any, ...]]] = [
+            ("summary", getattr(self._api, "get_user_summary", None), (day_str,)),
+            ("sleep", getattr(self._api, "get_sleep_data", None), (day_str,)),
+            ("hrv", getattr(self._api, "get_hrv_data", None), (day_str,)),
+        ]
+        if include_extended:
+            endpoints.extend(
+                [
+                    ("heart_rates", getattr(self._api, "get_heart_rates", None), (day_str,)),
+                    ("respiration", getattr(self._api, "get_respiration_data", None), (day_str,)),
+                    ("spo2", getattr(self._api, "get_spo2_data", None), (day_str,)),
+                    ("body_battery", getattr(self._api, "get_body_battery", None), (day_str, day_str)),
+                    ("training_readiness", getattr(self._api, "get_training_readiness", None), (day_str,)),
+                ]
+            )
+
         bundle: dict[str, Any] = {}
-        endpoints = (
-            ("summary", self._api.get_user_summary),
-            ("sleep", self._api.get_sleep_data),
-            ("hrv", self._api.get_hrv_data),
-        )
-        for name, method in endpoints:
+        for name, method, args in endpoints:
+            if method is None:
+                bundle[name] = None
+                continue
             try:
-                data = self._call(f"{name}:{day_str}", method, day_str)
+                data = self._call(f"{name}:{day_str}", method, *args)
                 bundle[name] = data
             except GarminConnectAuthenticationError:
                 raise
@@ -205,16 +232,36 @@ class SafeGarminClient:
                 bundle[name] = None
         return bundle
 
-    def fetch_activities_range(
-        self,
-        start_day: str,
-        end_day: str,
-        fetch_hr_zones: bool = True,
-    ) -> list[dict[str, Any]]:
-        """Scarica l'elenco delle attività nell'intervallo [start_day, end_day] e, se richiesto, le zone FC."""
+    def fetch_activity_details(self, activity_id: int | str) -> dict[str, Any] | None:
+        """Scarica le serie temporali ad alta risoluzione di un'attività (`get_activity_details`)."""
         if self._api is None:
             raise RuntimeError("Client non autenticato: chiama prima login().")
+        method = getattr(self._api, "get_activity_details", None)
+        if method is None:
+            return None
+        try:
+            return self._call(f"activity_details:{activity_id}", method, str(activity_id))
+        except Exception as exc:
+            logger.warning("Dettagli attività non disponibili per activity_id=%s (%s)", activity_id, type(exc).__name__)
+            return None
 
+    def fetch_activity_hr_zones(self, activity_id: int | str) -> Any | None:
+        """Scarica il tempo trascorso nelle zone di frequenza cardiaca (`get_activity_hr_in_timezones`)."""
+        if self._api is None:
+            raise RuntimeError("Client non autenticato: chiama prima login().")
+        method = getattr(self._api, "get_activity_hr_in_timezones", None)
+        if method is None:
+            return None
+        try:
+            return self._call(f"activity_hr_zones:{activity_id}", method, str(activity_id))
+        except Exception as exc:
+            logger.warning("Zone FC non disponibili per activity_id=%s (%s)", activity_id, type(exc).__name__)
+            return None
+
+    def fetch_activities_list(self, start_day: str, end_day: str) -> list[dict[str, Any]]:
+        """Scarica l'elenco paginato delle attività nell'intervallo [start_day, end_day]."""
+        if self._api is None:
+            raise RuntimeError("Client non autenticato: chiama prima login().")
         raw_list = self._call(
             f"activities:{start_day}..{end_day}",
             self._api.get_activities_by_date,
@@ -223,27 +270,20 @@ class SafeGarminClient:
         )
         if not isinstance(raw_list, list):
             return []
+        return [dict(item) for item in raw_list if isinstance(item, dict)]
 
+    def fetch_activities_range(
+        self,
+        start_day: str,
+        end_day: str,
+        fetch_hr_zones: bool = True,
+    ) -> list[dict[str, Any]]:
+        """Compatibilità con chiamate dirette: scarica elenco attività ed eventuali zone FC."""
+        items = self.fetch_activities_list(start_day, end_day)
         enriched: list[dict[str, Any]] = []
-        for item in raw_list:
-            if not isinstance(item, dict):
-                continue
-            act_copy = dict(item)
+        for act_copy in items:
             act_id = act_copy.get("activityId")
             if fetch_hr_zones and act_id is not None and "_hr_zones" not in act_copy:
-                try:
-                    zones = self._call(
-                        f"activity_hr_zones:{act_id}",
-                        self._api.get_activity_hr_in_timezones,
-                        str(act_id),
-                    )
-                    act_copy["_hr_zones"] = zones
-                except Exception as exc:
-                    logger.warning(
-                        "Zone FC non disponibili per activity_id=%s (%s)",
-                        act_id,
-                        type(exc).__name__,
-                    )
-                    act_copy["_hr_zones"] = None
+                act_copy["_hr_zones"] = self.fetch_activity_hr_zones(act_id)
             enriched.append(act_copy)
         return enriched

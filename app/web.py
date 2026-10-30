@@ -32,7 +32,7 @@ METRIC_META: dict[str, dict[str, str]] = {
     "spo2_sleep_avg_pct": {"label": "SpO2 Notturna", "unit": "%", "color_var": "--color-sleep"},
 }
 
-# Guida e spiegazione in italiano semplice di tutte le voci tecniche (mostrata nei rettangoli, nel drawer e nella pagina Guida)
+# Guida e spiegazione in italiano semplice + approfondimento tecnico/formula di tutte le voci (mostrata nei rettangoli, nel drawer e nella pagina Guida)
 METRIC_GUIDE: dict[str, dict[str, str]] = {
     "Recupero": {
         "area": "Recupero & Sistema Nervoso",
@@ -40,9 +40,14 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
         "meaning": (
             "Il punteggio di Recupero (0–100) stima lo stato del sistema nervoso autonomo al risveglio. "
             "Combina 5 segnali pesati rispetto alla tua baseline personale a 30 giorni: HRV notturna (35%), FC a riposo invertita (25%), "
-            "durata/qualità del sonno (20%), stress del giorno precedente (10%) e Body Battery al mattino (10%). "
+            "durata/qualità del sonno (25%) e Body Battery/Stress (15%). "
             "Valori ≥ 70 indicano ottimo recupero (via libera per sedute intense); 45–69 recupero normale; < 45 fatica o stress fisiologico."
         ),
+        "formula_latex": r"R = \frac{\sum_{i} w_i \cdot S_i}{\sum_{i} w_i}, \quad S_{\text{HRV}} = \text{clip}\!\left(50 + 25 \cdot z_{\text{HRV}},\, 0,\, 100\right), \quad S_{\text{RHR}} = \text{clip}\!\left(50 - 25 \cdot z_{\text{RHR}},\, 0,\, 100\right)",
+        "tech_note": "Ogni sotto-punteggio S_i mappa lo Z-score robusto a 30 giorni (z = 0 → 50/100; z = +2 → 100/100 per HRV; invertito per RHR). Se una metrica manca in un giorno, i pesi w_i vengono rinormalizzati automaticamente.",
+        "reference": "Modello autonomico multiparametrico ispirato a Plews et al. (2013), Eur J Appl Physiol.",
+        "page_endpoint": "page_recovery",
+        "page_label": "Approfondisci in Recupero →",
     },
     "Sforzo": {
         "area": "Attività & Carico",
@@ -52,15 +57,24 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Integra i minuti trascorsi nelle 5 zone di frequenza cardiaca (pesando esponenzialmente le zone alte Z4–Z5 tramite il TRIMP) "
             "e il movimento di base (passi giornalieri). Un valore di 30–50 corrisponde a una giornata attiva o seduta leggera; 60–80 a un allenamento impegnativo; > 80 a un carico molto elevato."
         ),
+        "formula_latex": r"\text{Sforzo} = 100 \cdot \left(1 - \exp\!\left(-\frac{L_{\text{TRIMP}} + 18 \cdot (\text{Passi}/10000)}{140}\right)\right), \quad L_{\text{zone}} = \frac{1}{60}\sum_{k=1}^{5} t_{Z_k} \cdot w_k",
+        "tech_note": "Pesi delle 5 zone cardiache (modello di Edwards modificato): w = [1.0, 2.0, 3.0, 4.5, 6.5] per minuto trascorso in Z1..Z5, con costante di scala k = 140 TRIMP.",
+        "reference": "Edwards (1993) Heart Zone Training & Banister (1991) Impulse-Response Model.",
+        "page_endpoint": "page_activities",
+        "page_label": "Approfondisci in Attività →",
     },
     "Sonno": {
         "area": "Sonno & Architettura",
         "short": "Valuta il ristoro notturno (0–100) unendo durata rispetto al tuo bisogno (8h), quota di sonno profondo/REM, continuità e regolarità.",
         "meaning": (
-            "Il punteggio del Sonno (0–100) misura la qualità complessiva del riposo: 40% durata rispetto al fabbisogno personale (480 min), "
-            "25% quota rigenerativa (Profondo N3 + REM, ideale ~40–45% del totale), 20% continuità (pochi minuti di veglia infra-sonno) "
-            "e 15% regolarità dell'orario di metà sonno rispetto alla tua abitudine."
+            "Il punteggio del Sonno (0–100) misura la qualità complessiva del riposo: 50% durata rispetto al fabbisogno personale (480 min), "
+            "25% quota rigenerativa (Profondo N3 + REM, ideale ~40–45% del totale) e 25% regolarità degli orari rispetto agli ultimi 7 giorni."
         ),
+        "formula_latex": r"\text{Sonno} = 0.50 \cdot S_{\text{dur}} + 0.25 \cdot S_{\text{fasi}} + 0.25 \cdot S_{\text{reg}}, \quad S_{\text{dur}} = \min\!\left(100,\, \frac{T_{\text{sonno}}}{480}\times 100\right)",
+        "tech_note": "S_fasi raggiunge 100/100 quando (Profondo + REM) ≥ 42% del sonno totale. S_reg penalizza linearmente le deviazioni dell'orario di addormentamento superiori a ±15 min rispetto alla mediana a 7 giorni.",
+        "reference": "Buysse (2014) Sleep Health Framework (Sleep, 37(1), 9–17).",
+        "page_endpoint": "page_sleep",
+        "page_label": "Approfondisci in Sonno →",
     },
     "HRV Notturna": {
         "area": "Recupero & Sistema Nervoso",
@@ -70,6 +84,11 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Non conta il valore assoluto confrontato con altre persone, ma lo scostamento dalla tua mediana a 30 giorni: "
             "un'HRV stabile o sopra la tua norma indica buon adattamento; un calo netto per più giorni segnala fatica residua, stress, alcol o inizio di malessere."
         ),
+        "formula_latex": r"\text{rMSSD} = \sqrt{\frac{1}{N-1}\sum_{i=1}^{N-1}\left(\text{RR}_{i+1} - \text{RR}_i\right)^2}\quad[\text{ms}]",
+        "tech_note": "RR_i è l'intervallo temporale in ms tra due battiti consecutivi (onda R). La radice quadrata delle differenze successive (rMSSD) isola selettivamente la modulazione parasimpatica (nervo vago) respiratoria.",
+        "reference": "Task Force ESC/NASPE (1996) & Shaffer & Ginsberg (2017), Front Public Health.",
+        "page_endpoint": "page_recovery",
+        "page_label": "Vedi serie HRV in Recupero →",
     },
     "FC a Riposo": {
         "area": "Recupero & Sistema Nervoso",
@@ -78,6 +97,11 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "La Frequenza Cardiaca a Riposo (RHR, in battiti al minuto) viene rilevata nelle fasi di quiete profonda/risveglio. "
             "È inversamente legata allo stato di recupero: un aumento di +3/+6 bpm sopra la tua mediana a 30 giorni accompagna spesso allenamenti pesanti non ancora smaltiti, disidratazione, cena tardiva o febbre."
         ),
+        "formula_latex": r"z_{\text{RHR}} = \frac{\text{RHR}_t - m_{30}(\text{RHR})}{1.4826 \cdot \text{MAD}_{30}(\text{RHR})}",
+        "tech_note": "Poiché la polarità fisiologica della RHR è inversa (più bassa = miglior efficienza vagale e maggior volume sistolico), uno Z-score negativo (z ≤ −0.75) viene classificato come 'In miglioramento (sotto la tua norma)'.",
+        "reference": "Buchheit (2014), Monitoring training status with HR measures, Front Physiol.",
+        "page_endpoint": "page_recovery",
+        "page_label": "Vedi trend RHR in Recupero →",
     },
     "Sonno Totale": {
         "area": "Sonno & Architettura",
@@ -86,14 +110,22 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Tempo totale effettivamente dormito tra l'addormentamento e il risveglio, sottraendo i periodi di veglia intra-notturna. "
             "Costituisce la base del recupero muscolare, ormonale e cognitivo."
         ),
+        "formula_latex": r"T_{\text{sonno}} = T_{\text{profondo}} + T_{\text{leggero}} + T_{\text{REM}} = T_{\text{letto}} - T_{\text{veglia}}",
+        "tech_note": "Calcolato in minuti (e convertito in ore decimali nei grafici) dalla somma degli stadi NREM (leggero + profondo) e REM rilevati dall'ipnogramma.",
+        "page_endpoint": "page_sleep",
+        "page_label": "Vedi dettagli in Sonno →",
     },
     "Body Battery Max": {
         "area": "Recupero & Sistema Nervoso",
         "short": "Livello massimo di riserva energetica (0–100 pt) raggiunto al mattino dopo la ricarica notturna.",
         "meaning": (
-            "La Body Battery (0–100) è un indice sintetico Garmin che sale durante il riposo (quando domina il sistema parasimpatico e l'HRV è alta) "
+            "La Body Battery (0–100) è un indice sintetico Garmin/Firstbeat che sale durante il riposo (quando domina il sistema parasimpatico e l'HRV è alta) "
             "e scende durante lo sforzo fisico e lo stress mentale. Il valore Max indica il picco raggiunto al risveglio."
         ),
+        "formula_latex": r"\text{BB}_{\max} = \max_{t \in [00:00,\,24:00]} \text{BB}(t) \in [5,\,100]",
+        "tech_note": "Derivato dal modello Firstbeat Analytics che integra continuamente HRV istantanea, frequenza cardiaca e movimento accelerometrico.",
+        "page_endpoint": "page_recovery",
+        "page_label": "Vedi Body Battery in Recupero →",
     },
     "Stress Medio": {
         "area": "Recupero & Sistema Nervoso",
@@ -102,6 +134,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Lo Stress Garmin (0–100) misura l'attivazione del sistema nervoso simpatico fuori dagli allenamenti: "
             "0–25 stato di riposo, 26–50 stress basso, 51–75 stress medio, 76–100 stress elevato. Anche digestione impegnativa, lavoro intenso o recupero post-gara alzano lo stress."
         ),
+        "tech_note": "Durante il movimento fisico intenso la misurazione dello stress viene sospesa dall'orologio per non confondere l'attivazione da esercizio con lo stress a riposo; l'effetto post-esercizio (EPOC) rientra invece nel calcolo.",
+        "page_endpoint": "index",
+        "page_label": "Vedi grafico BB & Stress in Oggi →",
     },
     "Passi Giornalieri": {
         "area": "Attività & Carico",
@@ -110,14 +145,18 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Numero totale di passi registrati dall'accelerometro da polso nelle 24 ore (camminata quotidiana + corsa/tennis). "
             "Misura il movimento complessivo fuori e dentro l'allenamento strutturato."
         ),
+        "page_endpoint": "page_trends",
+        "page_label": "Vedi trend Passi in Tendenze →",
     },
     "Respirazione Notte": {
         "area": "Sonno & Architettura",
         "short": "Atti respiratori al minuto (brpm) durante il sonno: è un parametro molto stabile (12–16 atti/m); aumenti insoliti indicano carico o vie aeree affaticate.",
         "meaning": (
-            "Frequenza respiratoria media notturna derivata dalla modulazione dell'onda ottica (PPG) e dell'HRV. "
+            "Frequenza respiratoria media notturna derivata dalla modulazione dell'onda ottica (PPG) e dell'HRV (aritmia sinusale respiratoria). "
             "Negli adulti sani a riposo varia pochissimo da una notte all'altra; un rialzo di +1.5/+2 atti/min sopra la tua mediana può segnalare affaticamento o infezione respiratoria."
         ),
+        "page_endpoint": "page_sleep",
+        "page_label": "Vedi fisiologia notturna in Sonno →",
     },
     "SpO2 Notturna": {
         "area": "Sonno & Architettura",
@@ -126,14 +165,23 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Stima ottica (Pulse Ox) della percentuale di emoglobina legata all'ossigeno nel sonno. "
             "Da polso può subire cali temporanei se il braccio è compresso; valori medi stabili ≥ 94% con pochi minuti < 92% sono fisiologici a bassa quota."
         ),
+        "formula_latex": r"T_{\text{SpO}_2 < 92\%} = \sum_{k:\,\text{SpO}_2(t_k) < 92} \Delta t_k \quad[\text{min}]",
+        "tech_note": "La dashboard integra tutti gli intervalli temporali Δt_k della serie `wellnessEpochSPO2DataDTOList` (risoluzione 1 minuto) in cui la lettura scende sotto la soglia configurata (default 92%).",
+        "page_endpoint": "page_sleep",
+        "page_label": "Vedi SpO2 in Sonno →",
     },
     "ln(rMSSD) 7 giorni": {
         "area": "Recupero & Sistema Nervoso",
         "short": "Logaritmo naturale dell'HRV mediato su 7 giorni: linearizza l'HRV riducendo il peso dei picchi isolati (metodo scientifico di Plews).",
         "meaning": (
-            "In fisiologia dello sport l'HRV ha una distribuzione asimmetrica: si usa il logaritmo naturale ln(rMSSD) mediato su 7 giorni "
+            "In fisiologia dello sport l'HRV ha una distribuzione asimmetrica (skewed): si usa il logaritmo naturale ln(rMSSD) mediato su 7 giorni "
             "e lo si confronta con la tua banda individuale a 60 giorni (media ± 0.75·SD). Finché la media a 7g resta dentro la banda, il carico è ben assimilato."
         ),
+        "formula_latex": r"y_t = \ln(\text{HRV}_t), \quad \bar{y}_{7,t} = \frac{1}{7}\sum_{i=0}^{6} y_{t-i}, \quad \text{Banda}_{60} = \left[\mu_{60} - 0.75\sigma_{60},\; \mu_{60} + 0.75\sigma_{60}\right]",
+        "tech_note": "Il moltiplicatore k = 0.75·SD definisce la Smallest Worthwhile Change (SWC) individuale su 60 giorni. Per riportare i limiti della banda in millisecondi si applica l'esponenziale exp(μ_60 ± 0.75·σ_60).",
+        "reference": "Plews et al. (2013), Training adaptation and heart rate variability in elite endurance athletes, Int J Sports Physiol Perform.",
+        "page_endpoint": "page_recovery",
+        "page_label": "Vedi Banda HRV in Recupero →",
     },
     "CV HRV (7 giorni)": {
         "area": "Recupero & Sistema Nervoso",
@@ -142,6 +190,11 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Rapporto tra deviazione standard e media dell'HRV negli ultimi 7 giorni (CV = SD / Media × 100). "
             "Un CV basso indica stabilità autonomica; un CV molto alto (> 15–20%) indica forti oscillazioni giorno-dopo-giorno dovute a carichi pesanti o sonno irregolare."
         ),
+        "formula_latex": r"\text{CV}_{7g} = \frac{s_{7g}(\text{HRV})}{\overline{\text{HRV}}_{7g}} \times 100\quad[\%]",
+        "tech_note": "Spesso un aumento del CV_7g precede il calo della media dell'HRV, segnalando instabilità nell'adattamento ai carichi.",
+        "reference": "Flatt & Esco (2016), Evaluating individual training adaptation using HRV coefficient of variation.",
+        "page_endpoint": "page_recovery",
+        "page_label": "Vedi CV HRV in Recupero →",
     },
     "Ricarica Body Battery": {
         "area": "Recupero & Sistema Nervoso",
@@ -150,6 +203,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Differenza netta (ΔBB) di Body Battery accumulata durante il sonno. Una ricarica di +35/+60 punti indica una notte altamente rigenerante; "
             "< +25 punti indica che il corpo ha lavorato tutta la notte per smaltire stress, digestione o fatica muscolare."
         ),
+        "formula_latex": r"\Delta\text{BB}_{\text{notte}} = \text{BB}_{\text{caricata}} \approx \text{BB}_{\max,\text{mattina}} - \text{BB}_{\min,\text{sera}}\quad[\text{pt}]",
+        "page_endpoint": "page_recovery",
+        "page_label": "Vedi Ricarica BB in Recupero →",
     },
     "Velocità Ricarica BB": {
         "area": "Recupero & Sistema Nervoso",
@@ -158,6 +214,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Divide i punti di Body Battery ricaricati per le ore effettive di sonno. Permette di confrontare la qualità rigenerativa del sonno "
             "indipendentemente dal fatto che tu abbia dormito 6 ore o 9 ore (valori buoni: ≥ 5–7 pt/ora)."
         ),
+        "formula_latex": r"v_{\text{BB}} = \frac{\Delta\text{BB}_{\text{notte}}}{T_{\text{sonno}}\;[\text{ore}]}\quad\left[\frac{\text{pt}}{\text{ora}}\right]",
+        "page_endpoint": "page_recovery",
+        "page_label": "Vedi Velocità Ricarica in Recupero →",
     },
     "Efficienza Sonno": {
         "area": "Sonno & Architettura",
@@ -166,6 +225,10 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Rapporto tra il sonno totale effettivo e il tempo totale trascorso a letto (Sonno / (Sonno + Veglia) × 100). "
             "Un'efficienza ≥ 88–90% è indice di sonno consolidato; valori < 85% indicano sonno frammentato o lunghi risvegli notturni."
         ),
+        "formula_latex": r"\text{Efficienza (\%)} = \frac{T_{\text{sonno}}}{T_{\text{sonno}} + T_{\text{veglia}}} \times 100",
+        "reference": "Ohayon et al. (2017), National Sleep Foundation's sleep quality recommendations, Sleep Health.",
+        "page_endpoint": "page_sleep",
+        "page_label": "Vedi Efficienza in Sonno →",
     },
     "Sonno Profondo": {
         "area": "Sonno & Architettura",
@@ -174,6 +237,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Il sonno profondo si concentra nella prima metà della notte. Negli adulti rappresenta tipicamente il 15–23% del sonno totale (circa 60–110 min). "
             "Aumenta dopo allenamenti muscolari intensi; si riduce con alcol, stress serale o camera troppo calda."
         ),
+        "formula_latex": r"\%\text{Profondo} = \frac{T_{\text{profondo}}}{T_{\text{sonno}}} \times 100",
+        "page_endpoint": "page_sleep",
+        "page_label": "Vedi Fasi del Sonno →",
     },
     "Sonno REM": {
         "area": "Sonno & Architettura",
@@ -182,6 +248,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Il sonno REM predomina nella seconda metà della notte e al mattino (tipicamente 20–25% del sonno totale, circa 90–120 min). "
             "Svegliarsi molto presto con la sveglia taglia soprattutto gli ultimi cicli ricchi di REM."
         ),
+        "formula_latex": r"\%\text{REM} = \frac{T_{\text{REM}}}{T_{\text{sonno}}} \times 100",
+        "page_endpoint": "page_sleep",
+        "page_label": "Vedi Fasi del Sonno →",
     },
     "Risvegli (≥2 min)": {
         "area": "Sonno & Architettura",
@@ -190,6 +259,10 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Conta quanti episodi di veglia di almeno 2 minuti interrompono la continuità del sonno. "
             "Pochi risvegli brevi (1–3 a notte) sono normali tra un ciclo e l'altro; molti risvegli riducono il potere ristoratore del sonno."
         ),
+        "formula_latex": r"N_{\text{risvegli}} = \sum_{k \in \text{Veglia}} \mathbb{I}\!\left(\Delta t_k \ge 2\;\text{min}\right)",
+        "tech_note": "Estratto dagli intervalli `sleepLevels` con `activityLevel == 3` (veglia) successivi al primo addormentamento.",
+        "page_endpoint": "page_sleep",
+        "page_label": "Vedi Ipnogramma in Sonno →",
     },
     "Latenza 1° Profondo": {
         "area": "Sonno & Architettura",
@@ -198,6 +271,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Misura quanto rapidamente il cervello scende nel sonno ad onde lente (N3) dopo l'addormentamento. "
             "Una latenza breve (15–35 min) riflette una buona pressione omeostatica del sonno."
         ),
+        "formula_latex": r"L_{\text{profondo}} = t_{\text{inizio } 1^\circ\text{ N3}} - t_{\text{addormentamento}}\quad[\text{min}]",
+        "page_endpoint": "page_sleep",
+        "page_label": "Vedi Ipnogramma in Sonno →",
     },
     "Latenza 1° REM": {
         "area": "Sonno & Architettura",
@@ -205,6 +281,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
         "meaning": (
             "Tempo impiegato per completare la prima discesa NREM ed entrare nel primo episodio REM della notte (normalmente tra 70 e 110 minuti)."
         ),
+        "formula_latex": r"L_{\text{REM}} = t_{\text{inizio } 1^\circ\text{ REM}} - t_{\text{addormentamento}}\quad[\text{min}]",
+        "page_endpoint": "page_sleep",
+        "page_label": "Vedi Ipnogramma in Sonno →",
     },
     "Cicli NREM→REM": {
         "area": "Sonno & Architettura",
@@ -213,6 +292,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Ogni notte il cervello alterna fasi di sonno leggero/profondo (NREM) e sonno REM in cicli di circa 90–100 minuti. "
             "Completare 4–5 cicli garantisce sia il recupero fisico (primi cicli) sia quello nervoso/cognitivo (ultimi cicli)."
         ),
+        "tech_note": "Il parser individua i blocchi REM di durata ≥ 5 minuti separati da almeno 30 minuti di sonno NREM intermedio.",
+        "page_endpoint": "page_sleep",
+        "page_label": "Vedi Cicli in Sonno →",
     },
     "Indice Regolarità (SRI)": {
         "area": "Sonno & Architettura",
@@ -221,6 +303,11 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Lo Sleep Regularity Index (SRI) penalizza la dispersione (deviazione standard circolare) dell'ora di addormentamento e di risveglio. "
             "SRI ≥ 80 indica orari molto regolari; < 65 indica forte variabilità che affatica l'orologio biologico anche se dormi abbastanza ore."
         ),
+        "formula_latex": r"\text{SRI} = \text{clip}\!\left(100 - \frac{\sigma_{\text{inizio}} + \sigma_{\text{fine}}}{2} \cdot 0.9,\, 0,\, 100\right)",
+        "tech_note": "Gli orari intorno alla mezzanotte vengono linearizzati (es. 23:30 = −30 min, 00:30 = +30 min) per calcolare correttamente la deviazione standard circolare senza discontinuità.",
+        "reference": "Phillips et al. (2017), Irregular sleep/wake patterns are associated with poorer academic performance and delayed circadian rhythms, Sci Rep.",
+        "page_endpoint": "page_sleep",
+        "page_label": "Vedi Regolarità in Sonno →",
     },
     "Metà del Sonno Media": {
         "area": "Sonno & Architettura",
@@ -228,6 +315,10 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
         "meaning": (
             "Il punto mediano del sonno (Mid-sleep) è il marcatore principale della fase del tuo ritmo circadiano interno."
         ),
+        "formula_latex": r"t_{\text{mid}} = t_{\text{inizio}} + \frac{t_{\text{fine}} - t_{\text{inizio}}}{2}",
+        "reference": "Roenneberg et al. (2003), Life between clocks: daily temporal patterns of human chronotypes, J Biol Rhythms.",
+        "page_endpoint": "page_sleep",
+        "page_label": "Vedi Cronotipo in Sonno →",
     },
     "Social Jetlag (WE vs Fer.)": {
         "area": "Sonno & Architettura",
@@ -236,6 +327,10 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Differenza tra l'orario mediano del sonno nel fine settimana (venerdì/sabato notte) e nei giorni lavorativi. "
             "Uno sfasamento di +90/+120 min equivale a cambiare fuso orario ogni weekend, causando stanchezza il lunedì mattina."
         ),
+        "formula_latex": r"\text{SJL} = \overline{t}_{\text{mid, weekend}} - \overline{t}_{\text{mid, feriali}}\quad[\text{min}]",
+        "reference": "Wittmann et al. (2006), Social jetlag: misalignment of biological and social time, Chronobiol Int.",
+        "page_endpoint": "page_sleep",
+        "page_label": "Vedi Social Jetlag in Sonno →",
     },
     "Variabilità Addormentamento": {
         "area": "Sonno & Architettura",
@@ -243,6 +338,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
         "meaning": (
             "Deviazione standard circolare dell'orario di inizio sonno negli ultimi 30 giorni. Più è contenuta (< 35 min), più rapido e profondo è l'addormentamento."
         ),
+        "formula_latex": r"\sigma_{\text{inizio}} = \sqrt{\frac{1}{N-1}\sum_{i=1}^{N}\left(t_{\text{inizio},i} - \bar{t}_{\text{inizio}}\right)^2}\quad[\text{min}]",
+        "page_endpoint": "page_sleep",
+        "page_label": "Vedi Variabilità in Sonno →",
     },
     "FC Minima Notturna": {
         "area": "Sonno & Architettura",
@@ -251,6 +349,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Valore minimo assoluto della frequenza cardiaca durante la notte e relativo orario. "
             "Dopo cene abbondanti, alcol o allenamenti serali intensi il nadir resta più alto e viene raggiunto solo verso il mattino."
         ),
+        "formula_latex": r"\text{FC}_{\min} = \min_{t \in \text{notte}} \text{FC}(t), \quad t_{\text{nadir}} = \arg\min_{t} \text{FC}(t)",
+        "page_endpoint": "page_sleep",
+        "page_label": "Vedi Nadir FC in Sonno →",
     },
     "Debito Sonno (7 giorni)": {
         "area": "Sonno & Architettura",
@@ -259,6 +360,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Somma delle ore di sonno perse negli ultimi 7 giorni rispetto all'obiettivo personale configurato (8.0 ore a notte). "
             "Un debito > 3–4 ore su 7 giorni riduce la reattività e abbassa l'HRV."
         ),
+        "formula_latex": r"\text{Debito}_{7g} = \max\!\left(0,\; \sum_{i=0}^{6}\frac{T_{\text{target}} - T_{\text{sonno},t-i}}{60}\right)\quad[\text{ore}]",
+        "page_endpoint": "page_sleep",
+        "page_label": "Vedi Debito Sonno in Sonno →",
     },
     "Debito Sonno (14 giorni)": {
         "area": "Sonno & Architettura",
@@ -266,6 +370,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
         "meaning": (
             "Bilancio cumulato del deficit di sonno su 14 giorni per monitorare la carenza cronica di riposo."
         ),
+        "formula_latex": r"\text{Debito}_{14g} = \max\!\left(0,\; \sum_{i=0}^{13}\frac{T_{\text{target}} - T_{\text{sonno},t-i}}{60}\right)\quad[\text{ore}]",
+        "page_endpoint": "page_sleep",
+        "page_label": "Vedi Debito Sonno in Sonno →",
     },
     "Carico Acuto (ATL 7g)": {
         "area": "Attività & Carico",
@@ -274,6 +381,11 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "L'Acute Training Load (ATL) è la media mobile esponenziale a 7 giorni del carico TRIMP giornaliero. "
             "Rappresenta la 'Fatica' a breve termine: sale rapidamente dopo giorni di allenamento intenso e scende nei giorni di riposo."
         ),
+        "formula_latex": r"\text{ATL}_t = \alpha_7 \cdot L_t + (1 - \alpha_7)\cdot \text{ATL}_{t-1}, \quad \alpha_7 = \frac{2}{7 + 1} = 0.25",
+        "tech_note": "Ogni nuovo giorno pesa per il 25% sull'ATL e il passato decade esponenzialmente per il 75%.",
+        "reference": "Banister et al. (1975, 1991), Modeling Elite Athletic Performance.",
+        "page_endpoint": "page_activities",
+        "page_label": "Vedi grafico ATL/CTL in Attività →",
     },
     "Carico Cronico (CTL 28g)": {
         "area": "Attività & Carico",
@@ -282,6 +394,11 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Il Chronic Training Load (CTL) è la media mobile esponenziale a 28 giorni del carico TRIMP. "
             "Rappresenta la tua 'Fitness' o cilindrata aerobica storica: costruirla richiede settimane di costanza."
         ),
+        "formula_latex": r"\text{CTL}_t = \alpha_{28} \cdot L_t + (1 - \alpha_{28})\cdot \text{CTL}_{t-1}, \quad \alpha_{28} = \frac{2}{28 + 1} \approx 0.069",
+        "tech_note": "Essendo mediato su una costante lunga (28 giorni), il CTL è stabile e misura quanto carico quotidiano il tuo corpo sa tollerare.",
+        "reference": "Banister et al. (1991) & Coggan (Performance Manager Chart).",
+        "page_endpoint": "page_activities",
+        "page_label": "Vedi grafico ATL/CTL in Attività →",
     },
     "Bilancio TSB (Fitness-Fatica)": {
         "area": "Attività & Carico",
@@ -290,6 +407,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Il Training Stress Balance (TSB = Fitness CTL − Fatica ATL) misura il bilancio tra condizionamento e stanchezza: "
             "valori leggermente negativi (−5 a −20) sono normali durante i blocchi di allenamento; valori positivi (+5 a +15) indicano gambe fresche (ideale prima di un match o gara)."
         ),
+        "formula_latex": r"\text{TSB}_t = \text{CTL}_t - \text{ATL}_t\quad[\text{TRIMP/g}]",
+        "page_endpoint": "page_activities",
+        "page_label": "Vedi TSB in Attività →",
     },
     "Rapporto ACWR": {
         "area": "Attività & Carico",
@@ -298,6 +418,10 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "L'Acute:Chronic Workload Ratio (ACWR = ATL / CTL, modello di Gabbett) confronta quanto stai facendo questa settimana con ciò a cui sei abituato da un mese: "
             "< 0.80 sotto-allenamento/scarico; 0.80–1.30 'sweet spot' (progressione sicura); > 1.50 picco di carico a maggior rischio di sovraccarico."
         ),
+        "formula_latex": r"\text{ACWR}_t = \frac{\text{ATL}_t}{\text{CTL}_t}, \quad \text{Zona ottimale: } 0.80 \le \text{ACWR}_t \le 1.30",
+        "reference": "Gabbett (2016), The training-injury prevention paradox: should athletes be training smarter and harder?, Br J Sports Med.",
+        "page_endpoint": "page_activities",
+        "page_label": "Vedi ACWR in Attività →",
     },
     "Tempo Zone 7g (Totale)": {
         "area": "Attività & Carico",
@@ -305,6 +429,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
         "meaning": (
             "Somma di tutti i minuti trascorsi nelle zone di frequenza cardiaca Z1–Z5 durante le attività degli ultimi 7 giorni."
         ),
+        "formula_latex": r"T_{\text{zone},7g} = \sum_{k=1}^{5} T_{Z_k,7g}\quad[\text{min}]",
+        "page_endpoint": "page_activities",
+        "page_label": "Vedi Zone in Attività →",
     },
     "Quota Bassa Intensità (Z1+Z2)": {
         "area": "Attività & Carico",
@@ -313,6 +440,10 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Frazione del volume settimanale svolta a bassa intensità cardiaca (Z1 + Z2, sotto ~75–80% FCmax). "
             "Negli sport di resistenza una quota Z1+Z2 del 65–80% permette di sviluppare i mitocondri e recuperare rapidamente."
         ),
+        "formula_latex": r"\%\text{Bassa} = \frac{T_{Z_1} + T_{Z_2}}{\sum_{k=1}^{5} T_{Z_k}} \times 100",
+        "reference": "Seiler (2010), What is best practice for training intensity and duration distribution in endurance athletes?, Int J Sports Physiol Perform.",
+        "page_endpoint": "page_activities",
+        "page_label": "Vedi Distribuzione Zone in Attività →",
     },
     "Quota Alta Intensità (Z4+Z5)": {
         "area": "Attività & Carico",
@@ -321,6 +452,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Frazione del tempo settimanale trascorsa ad alta intensità (Z4 Soglia Anaerobica + Z5 Massimale). "
             "Nel tennis e nelle corse veloci questa quota sale: monitorarla aiuta a non accumulare troppi giorni consecutivi in Z4–Z5."
         ),
+        "formula_latex": r"\%\text{Alta} = \frac{T_{Z_4} + T_{Z_5}}{\sum_{k=1}^{5} T_{Z_k}} \times 100",
+        "page_endpoint": "page_activities",
+        "page_label": "Vedi Distribuzione Zone in Attività →",
     },
     "TRIMP": {
         "area": "Attività & Carico",
@@ -329,6 +463,11 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Il TRIMP (Training Impulse) trasforma durata e frequenza cardiaca di un allenamento in un unico punteggio di carico fisiologico. "
             "Poiché il fattore esponenziale cresce con la riserva cardiaca, 40 minuti a battiti alti (es. Corsa in Z3–Z4 o Tennis intenso) generano molto più TRIMP di 60 minuti blandi in Z1 (es. Pesi con ampie pause)."
         ),
+        "formula_latex": r"\text{TRIMP} = \sum_{i} \Delta t_i \cdot \Delta\text{FC}_{r,i} \cdot 0.64 \cdot \exp\!\left(1.92 \cdot \Delta\text{FC}_{r,i}\right), \quad \Delta\text{FC}_r = \frac{\text{FC} - \text{FC}_{\text{riposo}}}{\text{FC}_{\max} - \text{FC}_{\text{riposo}}}",
+        "tech_note": "Il fattore esponenziale e^(1.92·ΔFC_r) modella la curva esponenziale del lattato ematico al crescere della frazione di riserva cardiaca (formula di Karvonen).",
+        "reference": "Banister (1991), Modeling Elite Athletic Performance, in Physiological Testing of Elite Athletes.",
+        "page_endpoint": "page_activities",
+        "page_label": "Vedi TRIMP in Attività →",
     },
     "HRR (60s / 120s)": {
         "area": "Attività & Carico",
@@ -338,6 +477,11 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "È un indicatore diretto della riattivazione del nervo vago (sistema parasimpatico): più battiti perdi in 1–2 minuti, migliore è il tuo stato di forma e freschezza. "
             "Richiede la serie secondo-per-secondo (`activity_details`) con pause di recupero o 1–2 minuti a fine seduta."
         ),
+        "formula_latex": r"\text{HRR}_{60} = \text{FC}(t_{\text{picco}}) - \text{FC}(t_{\text{picco}} + 60\,\text{s}), \quad \text{HRR}_{120} = \text{FC}(t_{\text{picco}}) - \text{FC}(t_{\text{picco}} + 120\,\text{s})",
+        "tech_note": "Se l'orologio viene fermato subito a fine allenamento ma la seduta è intermittente (es. Tennis), l'algoritmo calcola il 75° percentile del calo FC a 60s durante le pause in piedi/camminata (< 0.8 m/s per ≥ 45s) dopo picchi cardiaci.",
+        "reference": "Daanen et al. (2012), A systematic review on heart-rate recovery to monitor changes in training status, Int J Sports Physiol Perform.",
+        "page_endpoint": "page_activities",
+        "page_label": "Vedi HRR e Tracciato 1s in Attività →",
     },
     "Deriva Cardiaca (Cardiac Drift)": {
         "area": "Attività & Carico",
@@ -347,6 +491,11 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Su una corsa a passo costante ≥ 30 min, una deriva < 3.5–5% indica che la resistenza aerobica regge perfettamente la distanza; > 5% segnala affaticamento muscolare, caldo o disidratazione. "
             "Negli sport intermittenti (es. Tennis) indica la variazione di intensità cardiaca tra seconda e prima metà del match."
         ),
+        "formula_latex": r"\text{Deriva FC (\%)} = \left(\frac{\overline{\text{FC}}_2}{\overline{\text{FC}}_1} - 1\right)\times 100, \quad \text{Pa:Hr (\%)} = \left(1 - \frac{\bar{v}_2 / \overline{\text{FC}}_2}{\bar{v}_1 / \overline{\text{FC}}_1}\right)\times 100",
+        "tech_note": "Esclude automaticamente i primi 10 minuti di riscaldamento e gli ultimi 5 minuti di defaticamento prima di dividere la seduta in due metà uguali.",
+        "reference": "Coyle & González-Alonso (2001), Cardiovascular drift during prolonged exercise, Exerc Sport Sci Rev & Friel (TrainingBible).",
+        "page_endpoint": "page_activities",
+        "page_label": "Vedi Deriva FC in Attività →",
     },
     "Efficienza Velocità/FC": {
         "area": "Attività & Carico",
@@ -355,6 +504,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "L'Efficiency Factor (EF = velocità in m/min ÷ FC media in bpm) misura quanta strada percorri per ogni battito del cuore. "
             "Ad esempio, correre a 5:00/km (200 m/min) a 156 bpm dà 1.28 m/battito; se dopo un mese corri allo stesso passo a 148 bpm, l'efficienza sale a 1.35 m/battito."
         ),
+        "formula_latex": r"\text{EF} = \frac{\bar{v}\;[\text{m/min}]}{\overline{\text{FC}}\;[\text{bpm}]} = \frac{\text{Distanza}\;[\text{m}]}{\text{Durata}\;[\text{min}] \times \overline{\text{FC}}}\quad\left[\frac{\text{m}}{\text{battito}}\right]",
+        "page_endpoint": "page_activities",
+        "page_label": "Vedi Efficienza in Attività →",
     },
     "Training Effect (AE / AnE)": {
         "area": "Attività & Carico",
@@ -363,6 +515,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Il Training Effect Garmin valuta da 0.0 a 5.0 quanto la seduta migliora la capacità Aerobica (AE) e Anaerobica (AnE): "
             "1.0–1.9 Recupero/Beneficio minimo; 2.0–2.9 Mantenimento; 3.0–3.9 Miglioramento; 4.0–4.9 Miglioramento elevato; 5.0 Sovraccarico."
         ),
+        "tech_note": "Calcolato da Firstbeat sul picco di EPOC (Excess Post-exercise Oxygen Consumption) per la componente aerobica e sui picchi ad alta intensità per la componente anaerobica.",
+        "page_endpoint": "page_activities",
+        "page_label": "Vedi Training Effect in Attività →",
     },
     "Monotonia di Foster (7g)": {
         "area": "Attività & Carico",
@@ -372,6 +527,10 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Fisiologicamente l'adattamento richiede polarizzazione (giorni di spinta alternati a giorni di riposo o carico leggero): "
             "Monotonia < 1.5 = ottima modulazione; 1.5–2.0 = moderata; > 2.0 = carico piatto senza veri giorni di scarico."
         ),
+        "formula_latex": r"\text{Monotonia}_{7g} = \frac{\overline{L}_{7g}}{s_{L,7g}}, \quad \overline{L}_{7g} = \frac{1}{7}\sum_{i=1}^{7} L_i, \quad s_{L,7g} = \sqrt{\frac{1}{6}\sum_{i=1}^{7}\left(L_i - \overline{L}_{7g}\right)^2}",
+        "reference": "Foster (1998), Monitoring training in athletes with reference to overtraining syndrome, Med Sci Sports Exerc.",
+        "page_endpoint": "page_activities",
+        "page_label": "Vedi Monotonia in Attività →",
     },
     "Strain di Foster (7g)": {
         "area": "Attività & Carico",
@@ -380,6 +539,10 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Lo Strain Settimanale di Foster (Load 7g × Monotonia) amplifica il carico settimanale quando manca l'alternanza tra giorni duri e giorni di recupero. "
             "È uno degli indicatori più sensibili in letteratura per prevenire l'affaticamento del sistema nervoso autonomo e i cali prolungati di HRV."
         ),
+        "formula_latex": r"\text{Strain}_{7g} = \left(\sum_{i=1}^{7} L_i\right) \times \text{Monotonia}_{7g}",
+        "reference": "Foster (1998), Med Sci Sports Exerc, 30(7), 1164–1168.",
+        "page_endpoint": "page_activities",
+        "page_label": "Vedi Strain di Foster in Attività →",
     },
     "Profilo Multi-Sport (Tennis vs Pesi vs Corsa)": {
         "area": "Attività & Carico",
@@ -389,6 +552,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "il Tennis ha densità ~3 volte superiore (~1.5–1.7 TRIMP/min con ~25% in Z4–Z5 per via degli scatti); la Corsa ha la massima densità aerobica continua (~1.9–2.1 TRIMP/min). "
             "Confrontare ΔHRV e ΔRHR a t+1 mostra come il tuo sistema nervoso recupera dopo ciascuno sport."
         ),
+        "formula_latex": r"\text{Densità}_S = \frac{\sum_{i \in S}\text{TRIMP}_i}{\sum_{i \in S} T_i\;[\text{min}]}, \quad \Delta\text{HRV}_{S,t+1} = \overline{\text{HRV}}_{t+1 \mid S} - \overline{\text{HRV}}_{t+1 \mid \text{riposo}}",
+        "page_endpoint": "page_activities",
+        "page_label": "Vedi Confronto Multi-Sport in Attività →",
     },
     "Simulatore What-If (7g)": {
         "area": "Attività & Carico",
@@ -397,6 +563,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Usa le equazioni ricorsive esponenziali di Banister partendo dal tuo stato attuale (ATL_0, CTL_0) per mostrare in anticipo "
             "come evolveranno la freschezza atletica (TSB) e il rapporto ACWR nei prossimi 7 giorni scegliendo tra Riposo, Pesi, Tennis o Corsa."
         ),
+        "formula_latex": r"\hat{\text{ATL}}_k = \alpha_7 \hat{L}_k + (1-\alpha_7)\hat{\text{ATL}}_{k-1}, \quad \hat{\text{CTL}}_k = \alpha_{28} \hat{L}_k + (1-\alpha_{28})\hat{\text{CTL}}_{k-1}, \quad \hat{\text{TSB}}_k = \hat{\text{CTL}}_k - \hat{\text{ATL}}_k",
+        "page_endpoint": "page_activities",
+        "page_label": "Prova il Simulatore in Attività →",
     },
     "Baseline Mediana 30g & Z-score Robusto": {
         "area": "Statistica & Trend",
@@ -404,8 +573,13 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
         "meaning": (
             "Invece di usare soglie fisse uguali per tutti o la media aritmetica (che viene falsata da una singola notte insonne), "
             "la dashboard calcola la tua Mediana mobile a 30 giorni e la dispersione robusta MAD. Lo Z-score robusto z = (Valore − Mediana) / (1.4826 · MAD) "
-            "indica di quante tue 'deviazioni standard' il valore di oggi si discosta dalla tua abitudine: tra −1 e +1 sei 'in linea con la tua norma'."
+            "indica di quante tue 'deviazioni standard' il valore di oggi si discosta dalla tua abitudine: tra −0.75 e +0.75 sei 'in linea con la tua norma'."
         ),
+        "formula_latex": r"m_{30} = \text{mediana}(x_{t-29..t}), \quad \text{MAD}_{30} = \text{mediana}(|x - m_{30}|), \quad z_{\text{rob}} = \frac{x_t - m_{30}}{1.4826 \cdot \text{MAD}_{30}}",
+        "tech_note": "Il fattore costante 1.4826 = 1 / Φ⁻¹(0.75) rende il MAD un estimatore consistente della deviazione standard σ per distribuzioni normali, ma con punto di rottura del 50% contro gli outlier.",
+        "reference": "Leys et al. (2013), Detecting outliers: Do not use standard deviation around the mean, use absolute deviation around the median, J Exp Soc Psychol.",
+        "page_endpoint": "index",
+        "page_label": "Vedi Metriche vs Baseline in Oggi →",
     },
     "Trend Theil-Sen, Mann-Kendall & CUSUM": {
         "area": "Statistica & Trend",
@@ -414,6 +588,11 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "La pendenza di Theil-Sen calcola la mediana di tutte le pendenze tra coppie di giorni (es. +0.8 ms/settimana), mentre il test di Mann-Kendall "
             "verifica se il trend è statisticamente reale (p < 0.05) o semplice oscillazione casuale. Il CUSUM rileva invece i punti di svolta in cui la media si sposta stabilmente verso l'alto o verso il basso."
         ),
+        "formula_latex": r"\hat{\beta}_{\text{TS}} = \text{mediana}_{i < j}\!\left(\frac{y_j - y_i}{t_j - t_i}\right), \quad S_{\text{MK}} = \sum_{i < j} \text{sgn}(y_j - y_i), \quad C_t^+ = \max\!\left(0,\, C_{t-1}^+ + z_t - 0.5\right)",
+        "tech_note": "Quando la somma cumulata CUSUM (C_t⁺ o C_t⁻) supera la soglia h = 4.0 deviazioni standard robuste, viene segnalato un cambio di regime (changepoint) e l'accumulatore si azzera.",
+        "reference": "Sen (1968), JASA; Mann (1945), Econometrica; Page (1954), Biometrika (CUSUM).",
+        "page_endpoint": "page_trends",
+        "page_label": "Esplora in Tendenze →",
     },
     "Correlazione di Spearman (ρ) & Lag": {
         "area": "Statistica & Trend",
@@ -423,6 +602,11 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "ρ > 0 indica che all'aumentare di X aumenta anche Y; ρ < 0 indica che all'aumentare di X diminuisce Y (es. più carico oggi → HRV più bassa domani a Lag +1). "
             "Ricorda sempre: correlazione esplorativa non dimostra da sola un rapporto di causa-effetto."
         ),
+        "formula_latex": r"\rho_s(\tau) = \frac{\text{cov}\!\left(\text{rg}(X_t),\, \text{rg}(Y_{t+\tau})\right)}{\sigma_{\text{rg}(X)} \cdot \sigma_{\text{rg}(Y)}} \in [-1,\, +1], \quad \tau \in \{0, 1, 2\}\;\text{giorni}",
+        "tech_note": "Per evitare accoppiamenti spuri attraverso buchi temporali, il lag τ viene costruito tramite join esatto sulla data calendario (t + τ giorni) e richiede n ≥ 10 coppie valide.",
+        "reference": "Spearman (1904), The proof and measurement of association between two things.",
+        "page_endpoint": "page_correlations",
+        "page_label": "Esplora Matrice e Scatter in Correlazioni →",
     },
     "Diario Contestuale (Tag Giornalieri)": {
         "area": "Statistica & Trend",
@@ -431,6 +615,9 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "Permette di annotare con 1 clic i fattori di contesto non misurati dall'orologio e confrontare nella pagina Correlazioni "
             "la differenza mediana di HRV notturna, FC a riposo, Punteggio Sonno e Stress tra i giorni con il tag attivo e quelli senza tag."
         ),
+        "formula_latex": r"\Delta M(\text{tag}) = \text{Mediana}\!\left(M_{d \in \text{tag}}\right) - \text{Mediana}\!\left(M_{d \notin \text{tag}}\right)",
+        "page_endpoint": "page_correlations",
+        "page_label": "Vedi Impatto Tag in Correlazioni →",
     },
 }
 

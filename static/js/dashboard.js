@@ -69,6 +69,10 @@
     "\\rho": "ρ",
     "\\sigma": "σ",
     "\\tau": "τ",
+    "\\circ": "°",
+    "\\arg": "<span class=\"math-text\">arg</span>",
+    "\\sgn": "<span class=\"math-text\">sgn</span>",
+    "\\cov": "<span class=\"math-text\">cov</span>",
     "\\ln": "<span class=\"math-text\">ln</span>",
     "\\exp": "<span class=\"math-text\">exp</span>",
     "\\max": "<span class=\"math-text\">max</span>",
@@ -123,6 +127,27 @@
         const grp = extractBracedGroup(expr, i);
         i = grp.nextIdx;
         out += '<span class="math-overline">' + parseLatexFragment(grp.content) + "</span>";
+        continue;
+      }
+
+      if (expr.startsWith("\\sqrt", i)) {
+        i += 5;
+        while (i < n && expr[i] === " ") i++;
+        const grp = extractBracedGroup(expr, i);
+        i = grp.nextIdx;
+        out +=
+          '<span class="math-sqrt"><span class="math-sqrt-sym">√</span><span class="math-sqrt-body">' +
+          parseLatexFragment(grp.content) +
+          "</span></span>";
+        continue;
+      }
+
+      if (expr.startsWith("\\hat", i)) {
+        i += 4;
+        while (i < n && expr[i] === " ") i++;
+        const grp = extractBracedGroup(expr, i);
+        i = grp.nextIdx;
+        out += '<span class="math-hat">' + parseLatexFragment(grp.content) + "̂</span>";
         continue;
       }
 

@@ -39,6 +39,33 @@
         <p style="margin: 4px 0 0; font-size: var(--text-xs); color: var(--text-secondary); line-height: 1.55;">
           {{ info.meaning }}
         </p>
+
+        {% if info.formula_latex %}
+          <div class="guide-formula-box">
+            <span class="card-label" style="font-size: 10px; color: var(--text-muted);">Formula matematica di calcolo:</span>
+            <div class="formula-code js-render-latex" data-latex="{{ info.formula_latex }}" style="margin: 4px 0 2px; padding: 8px 12px; font-size: 0.95rem;"></div>
+          </div>
+        {% endif %}
+
+        {% if info.tech_note %}
+          <div class="guide-tech-note">
+            <strong>Dettaglio algoritmico:</strong> {{ info.tech_note }}
+          </div>
+        {% endif %}
+
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-top: 6px;">
+          {% if info.reference %}
+            <div class="guide-ref">📖 {{ info.reference }}</div>
+          {% else %}
+            <div></div>
+          {% endif %}
+
+          {% if info.page_endpoint %}
+            <a href="{{ url_for(info.page_endpoint) }}" class="guide-link">
+              {{ info.page_label or 'Vedi nella dashboard →' }}
+            </a>
+          {% endif %}
+        </div>
       </article>
     {% endfor %}
   </section>

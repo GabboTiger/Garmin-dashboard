@@ -1,0 +1,28 @@
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Virtual environments
+env/
+.venv/
+venv/
+
+# Local database, tokens, and user data
+data/
+*.db
+*.sqlite
+*.sqlite3
+garmin_tokens.json
+.garminconnect/
+
+# Python cache & artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store

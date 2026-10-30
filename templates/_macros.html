@@ -91,16 +91,17 @@
       {% endif %}
     </div>
 
-    <div class="baseline-delta" style="width: 100%; justify-content: space-between;">
+    {% set sem_class = 'status-' ~ baseline_obj.get('semantic_state', 'neutral') if (baseline_obj and baseline_obj.status == 'ok') else 'status-neutral' %}
+    <div class="baseline-delta {{ sem_class }}" style="width: 100%; justify-content: space-between;">
       <div style="display: flex; align-items: center; gap: var(--space-2);">
         {% if baseline_obj and baseline_obj.status == "ok" %}
           <span class="baseline-arrow" aria-hidden="true">{{ baseline_obj.direction_arrow }}</span>
-          <span>
-            <strong>{{ baseline_obj.direction_text }}</strong>
-            <span style="color: var(--text-muted); display: block; font-size: 11px;">
+          <div class="baseline-text-col">
+            <strong class="baseline-status-title">{{ baseline_obj.semantic_label or baseline_obj.direction_text }}</strong>
+            <span class="baseline-norm-sub">
               Norma 30g: {{ baseline_obj.median }} {{ unit }} (±{{ baseline_obj.robust_sd }})
             </span>
-          </span>
+          </div>
         {% elif baseline_obj and baseline_obj.status == "calibrating" %}
           <span class="baseline-arrow" aria-hidden="true">—</span>
           <span>Calibrazione ({{ baseline_obj.n_days }}/{{ baseline_obj.min_required_days }}g)</span>
@@ -111,7 +112,7 @@
           <span style="color: var(--text-muted); font-size: var(--text-xs);">Tocca per significato e formula</span>
         {% endif %}
       </div>
-      <span style="color: var(--text-muted); font-size: var(--text-xs); font-weight: 600;">▸</span>
+      <span class="baseline-chevron" aria-hidden="true">▸</span>
     </div>
   </button>
 {% endmacro %}

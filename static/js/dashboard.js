@@ -331,8 +331,12 @@
     }
 
     if (statusEl) {
+      statusEl.className = "drawer-status-badge";
       if (baselineObj && baselineObj.status === "ok") {
-        statusEl.textContent = baselineObj.direction_arrow + " " + baselineObj.direction_text;
+        statusEl.textContent = baselineObj.direction_arrow + " " + (baselineObj.semantic_label || baselineObj.direction_text);
+        if (baselineObj.semantic_state) {
+          statusEl.classList.add("status-" + baselineObj.semantic_state);
+        }
       } else if (payload.subtitle || payload.status_label) {
         statusEl.textContent = payload.subtitle || payload.status_label;
       } else if (payload.quality_flag) {
@@ -342,15 +346,25 @@
       }
     }
 
-    // 1B. Spiegazione del significato in italiano semplice
+    // 1B. Spiegazione del significato in italiano semplice (formattata per leggibilità)
     const expStr = payload.explanation || (triggerEl ? triggerEl.getAttribute("data-explanation") : "");
     if (expSecEl && expTextEl) {
       if (expStr && expStr.trim() !== "") {
         expSecEl.style.display = "block";
-        expTextEl.textContent = expStr;
+        const lines = expStr
+          .split(/\n+/)
+          .map(function (l) { return l.trim(); })
+          .filter(Boolean);
+        expTextEl.innerHTML = lines
+          .map(function (line) {
+            const clean = escapeHtml(line.replace(/^[•\-]\s*/, ""));
+            const formatted = clean.replace(/^([^:]{2,42}):/, "<strong>$1:</strong>");
+            return '<div class="exp-paragraph">' + (line.startsWith("•") ? "• " : "") + formatted + "</div>";
+          })
+          .join("");
       } else {
         expSecEl.style.display = "none";
-        expTextEl.textContent = "";
+        expTextEl.innerHTML = "";
       }
     }
 
@@ -381,7 +395,8 @@
         });
         kpiItems.push({
           label: "Stato rispetto alla Baseline",
-          value: (baselineObj.direction_arrow || "") + " " + (baselineObj.direction_text || "—")
+          value: (baselineObj.direction_arrow || "") + " " + (baselineObj.semantic_label || baselineObj.direction_text || "—"),
+          semanticClass: baselineObj.semantic_state ? "status-" + baselineObj.semantic_state : ""
         });
         kpiItems.push({
           label: "Copertura Storica (30 giorni)",
@@ -427,7 +442,7 @@
         kpiSecEl.style.display = "block";
         kpiItems.forEach(function (item) {
           const box = document.createElement("div");
-          box.className = "drawer-kpi-box";
+          box.className = "drawer-kpi-box" + (item.semanticClass ? " " + item.semanticClass : "");
           box.innerHTML =
             '<span class="drawer-kpi-label">' + escapeHtml(item.label) + "</span>" +
             '<span class="drawer-kpi-val">' + escapeHtml(item.value) + "</span>";

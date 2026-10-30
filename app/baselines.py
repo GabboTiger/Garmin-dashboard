@@ -27,6 +27,16 @@ MIN_ROBUST_SIGMA = 1e-3
 # Entro |z| <= IN_LINE_Z_BAND il valore viene descritto come "in linea con la tua norma"
 IN_LINE_Z_BAND = 0.5
 
+# Metriche in cui un valore PIÙ BASSO della propria norma è fisiologicamente positivo (es. FC a riposo, stress, frequenza respiratoria)
+LOWER_IS_BETTER_METRICS: frozenset[str] = frozenset(
+    {
+        "rhr_bpm",
+        "stress_avg",
+        "respiration_sleep_brpm",
+        "sleep_awake_min",
+    }
+)
+
 
 def compute_metric_baseline(
     daily_rows: list[dict[str, Any]],
@@ -119,6 +129,8 @@ def compute_metric_baseline(
             "z_robust": None,
             "direction_arrow": "—",
             "direction_text": "calibrazione in corso" if target_val is not None else "dato assente",
+            "semantic_state": "neutral",
+            "semantic_label": "Calibrazione in corso" if target_val is not None else "Dato assente",
         }
 
     if target_val is None or median_val is None or robust_sd is None:
@@ -139,20 +151,37 @@ def compute_metric_baseline(
             "z_robust": None,
             "direction_arrow": "—",
             "direction_text": "dato assente",
+            "semantic_state": "neutral",
+            "semantic_label": "Dato assente",
         }
 
     delta = round(target_val - median_val, 2)
     z_val = round((target_val - median_val) / max(robust_sd, MIN_ROBUST_SIGMA), 2)
+    lower_is_better = metric in LOWER_IS_BETTER_METRICS
 
     if z_val > IN_LINE_Z_BAND:
         arrow = "▲"
         text = "sopra la tua norma"
+        if lower_is_better:
+            semantic_state = "worsening"
+            semantic_label = "Sopra la norma · Più affaticato"
+        else:
+            semantic_state = "improving"
+            semantic_label = "Sopra la norma · In miglioramento"
     elif z_val < -IN_LINE_Z_BAND:
         arrow = "▼"
         text = "sotto la tua norma"
+        if lower_is_better:
+            semantic_state = "improving"
+            semantic_label = "Sotto la norma · In miglioramento"
+        else:
+            semantic_state = "worsening"
+            semantic_label = "Sotto la norma · Sotto tono"
     else:
         arrow = "•"
         text = "in linea"
+        semantic_state = "in_line"
+        semantic_label = "In linea con la tua norma"
 
     return {
         "metric": metric,
@@ -171,6 +200,8 @@ def compute_metric_baseline(
         "z_robust": z_val,
         "direction_arrow": arrow,
         "direction_text": text,
+        "semantic_state": semantic_state,
+        "semantic_label": semantic_label,
     }
 
 

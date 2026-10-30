@@ -19,6 +19,12 @@ from app.analysis.correlations import (
     compute_correlation_matrix,
     spearman_corr_with_lag,
 )
+from app.analysis.recovery_trends import (
+    compute_body_battery_recharge,
+    compute_hrv_band,
+    compute_metric_trend_analysis,
+    compute_training_to_recovery_effect,
+)
 from app.analysis.sleep import (
     compute_nocturnal_physiology_and_debt,
     compute_sleep_architecture,
@@ -31,14 +37,18 @@ __all__ = [
     "WRIST_SENSOR_DISCLAIMER",
     "build_daily_dataframe",
     "compute_acute_chronic_load",
+    "compute_body_battery_recharge",
     "compute_cardiac_drift",
     "compute_completeness",
     "compute_correlation_matrix",
     "compute_heart_rate_recovery",
+    "compute_hrv_band",
+    "compute_metric_trend_analysis",
     "compute_nocturnal_physiology_and_debt",
     "compute_sleep_architecture",
     "compute_sleep_regularity",
     "compute_speed_hr_efficiency",
+    "compute_training_to_recovery_effect",
     "compute_trimp",
     "compute_weekly_zone_distribution",
     "extract_activity_timeseries",

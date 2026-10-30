@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="it" {% if force_theme %}data-theme="{{ force_theme }}"{% endif %}>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Garmin Personal Dashboard{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
+  <script src="{{ url_for('static', filename='vendor/plotly.min.js') }}"></script>
+</head>
+<body>
+  <div class="container">
+    <header class="top-header">
+      <div class="top-row">
+        <div>
+          <h1 class="brand-title">Garmin Personal Dashboard</h1>
+          <span class="badge-mode">
+            {% if demo_mode %}MODALITÀ DEMO (90g sintetici){% else %}DATI REALI GARMIN{% endif %}
+            · {{ total_days }} giorni in archivio
+          </span>
+        </div>
+
+        {% if day %}
+        <div class="date-selector" aria-label="Selettore di data">
+          {% if prev_day %}
+            <a class="btn-icon" href="{{ url_for(request.endpoint, day=prev_day) }}" title="Giorno precedente" aria-label="Giorno precedente">◀</a>
+          {% else %}
+            <span class="btn-icon" style="opacity: 0.35;">◀</span>
+          {% endif %}
+          <strong>{{ day }}</strong>
+          {% if next_day %}
+            <a class="btn-icon" href="{{ url_for(request.endpoint, day=next_day) }}" title="Giorno successivo" aria-label="Giorno successivo">▶</a>
+          {% else %}
+            <span class="btn-icon" style="opacity: 0.35;">▶</span>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+
+      <nav class="nav-links" aria-label="Navigazione principale">
+        <a class="nav-link {% if active_page == 'today' %}active{% endif %}" href="{{ url_for('index', day=day) }}">Oggi</a>
+        <a class="nav-link {% if active_page == 'sleep' %}active{% endif %}" href="{{ url_for('page_sleep', day=day) }}">Sonno</a>
+        <a class="nav-link {% if active_page == 'recovery' %}active{% endif %}" href="{{ url_for('page_recovery', day=day) }}">Recupero</a>
+        <a class="nav-link {% if active_page == 'activities' %}active{% endif %}" href="{{ url_for('page_activities', day=day) }}">Attività</a>
+        <a class="nav-link {% if active_page == 'trends' %}active{% endif %}" href="{{ url_for('page_trends', day=day) }}">Tendenze</a>
+        <a class="nav-link {% if active_page == 'correlations' %}active{% endif %}" href="{{ url_for('page_correlations', day=day) }}">Correlazioni</a>
+        <a class="nav-link {% if active_page == 'design' %}active{% endif %}" href="{{ url_for('page_design') }}">Design System</a>
+      </nav>
+    </header>
+
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+
+    <p class="notice-disclaimer">
+      Euristiche personali e stime derivate da sensore ottico da polso a scopo puramente informativo:
+      non costituiscono indicazioni o diagnosi mediche.
+    </p>
+  </div>
+
+  <!-- Pannello di dettaglio a scomparsa a 3 strati (1: Numero, 2: Scomposizione, 3: Come si calcola) -->
+  <div id="detail-backdrop" class="drawer-backdrop" aria-hidden="true"></div>
+  <aside
+    id="detail-panel"
+    class="drawer-panel"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="drawer-title"
+    aria-hidden="true"
+  >
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <span id="drawer-title" class="card-label">Dettaglio</span>
+      <button id="drawer-close-btn" type="button" class="btn-icon" aria-label="Chiudi pannello (Esc)">✕ Chiudi</button>
+    </div>
+
+    <!-- Strato 1: Valore principale -->
+    <div>
+      <div id="drawer-value" class="card-value">—</div>
+      <div id="drawer-status" style="font-size: var(--text-sm); color: var(--text-secondary); margin-top: var(--space-1);"></div>
+    </div>
+
+    <!-- Strato 2: Scomposizione / Componenti / Assunzioni -->
+    <div>
+      <div class="card-label" style="margin-bottom: var(--space-2);">Scomposizione, Baseline e Qualità</div>
+      <div id="drawer-components"></div>
+    </div>
+
+    <!-- Strato 3: Secondo clic -> Come si calcola (Formula, Parametri, Limiti) -->
+    <div class="how-it-works-box">
+      <button id="drawer-how-toggle" type="button" class="how-toggle-btn" aria-expanded="false">
+        <span id="drawer-how-title">Come si calcola (formula, parametri e limiti)</span>
+        <span aria-hidden="true">▾</span>
+      </button>
+      <div id="drawer-how-content" class="how-content">
+        <div class="card-label">Formula matematica</div>
+        <code id="drawer-how-formula" class="formula-code"></code>
+        <div class="card-label" style="margin-top: var(--space-3);">Parametri attivi</div>
+        <div id="drawer-how-params" style="margin-top: var(--space-1);"></div>
+        <div class="card-label" style="margin-top: var(--space-3);">Limiti e avvertenze</div>
+        <p id="drawer-how-limits" style="margin-top: var(--space-1);"></p>
+      </div>
+    </div>
+  </aside>
+
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Correlazioni — Garmin Personal Dashboard{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4);">
+  <div>
+    <h2 class="section-title" style="margin: 0;">Matrice di Correlazione di Spearman (Ritardo: {{ lag_days }} giorni)</h2>
+    <p style="font-size: var(--text-sm); color: var(--text-secondary);">{{ matrix.label }}</p>
+  </div>
+  <div style="display: flex; gap: var(--space-2);">
+    <a class="badge-mode" href="{{ url_for('page_correlations', lag=0) }}">Lag 0 giorni</a>
+    <a class="badge-mode" href="{{ url_for('page_correlations', lag=1) }}">Lag +1 giorno</a>
+    <a class="badge-mode" href="{{ url_for('page_correlations', lag=2) }}">Lag +2 giorni</a>
+  </div>
+</div>
+
+<section class="card">
+  <div class="table-wrap">
+    <table class="table-clean">
+      <thead>
+        <tr>
+          <th>Metrica X (giorno t)</th>
+          <th>Metrica Y (giorno t + {{ lag_days }})</th>
+          <th>Spearman ρ</th>
+          <th>Giorni usati (n)</th>
+          <th>Avvertenza</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in matrix.cells if c.metric_x != c.metric_y %}
+        <tr>
+          <td><strong>{{ c.metric_x }}</strong></td>
+          <td><strong>{{ c.metric_y }}</strong></td>
+          <td>{{ c.rho if c.rho is not none else "non calcolabile" }}</td>
+          <td>n = {{ c.n_days }}</td>
+          <td style="font-size: var(--text-xs); color: var(--text-secondary);">{{ c.label }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

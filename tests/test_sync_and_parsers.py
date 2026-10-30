@@ -260,14 +260,22 @@ def test_web_app_demo_and_status_endpoint(tmp_path: Path) -> None:
     app = create_app(db_path=tmp_path / "demo.db", demo_mode=True)
     test_client = app.test_client()
 
-    resp = test_client.get("/")
-    assert resp.status_code == 200
-    html = resp.get_data(as_text=True)
-    assert "Garmin Personal Dashboard" in html
-    assert "MODALITÀ DEMO" in html
+    for route in ("/", "/sleep", "/recovery", "/activities", "/trends", "/correlations", "/design"):
+        resp = test_client.get(route)
+        assert resp.status_code == 200, f"Route {route} failed"
+        html = resp.get_data(as_text=True)
+        assert "Garmin Personal Dashboard" in html
+        assert "MODALITÀ DEMO" in html
 
     api_resp = test_client.get("/api/status")
     assert api_resp.status_code == 200
     data = api_resp.get_json()
     assert data["demo_mode"] is True
     assert data["days_count"] == 90
+
+    day_resp = test_client.get("/api/day/2026-10-30")
+    assert day_resp.status_code == 200
+    day_data = day_resp.get_json()
+    assert "scores" in day_data
+    assert "baselines" in day_data
+

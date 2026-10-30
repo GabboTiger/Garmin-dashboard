@@ -162,3 +162,4 @@ def compute_completeness(
             "completeness_pct": pct,
         }
     return result
+

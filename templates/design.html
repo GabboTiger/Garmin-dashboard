@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% from "_macros.html" import render_score_ring, render_metric_card %}
+
+{% block title %}Design System & Galleria Componenti — Garmin Dashboard{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4);">
+  <h2 class="section-title" style="margin: 0;">Galleria del Design System (Fase 1b)</h2>
+  <div style="display: flex; gap: var(--space-2);">
+    <a class="badge-mode" href="{{ url_for('page_design', theme='dark') }}">Tema Scuro</a>
+    <a class="badge-mode" href="{{ url_for('page_design', theme='light') }}">Tema Chiaro</a>
+  </div>
+</div>
+
+<!-- 1. Tre anelli di punteggio SVG -->
+<h3 class="section-title">1. Anelli di Punteggio SVG (cliccabili → Pannello a 3 strati)</h3>
+<section class="grid-12">
+  {{ render_score_ring(scores.recovery, '--color-recovery') }}
+  {{ render_score_ring(scores.strain, '--color-strain') }}
+  {{ render_score_ring(scores.sleep, '--color-sleep') }}
+</section>
+
+<!-- 2. Schede numero con scostamento neutro (▲▼•) dalla baseline -->
+<h3 class="section-title">2. Schede Numero e Variazione rispetto alla Baseline (mai verde/rosso)</h3>
+<section class="grid-12">
+  {{ render_metric_card("HRV Notturna", latest.hrv_night_ms, "ms", baselines.hrv_night_ms, scores.recovery, "--color-recovery", "col-4") }}
+  {{ render_metric_card("FC a Riposo", latest.rhr_bpm|int if latest.rhr_bpm else None, "bpm", baselines.rhr_bpm, scores.recovery, "--color-recovery", "col-4") }}
+  {{ render_metric_card("Sonno Totale", (latest.sleep_total_min / 60)|round(1) if latest.sleep_total_min else None, "h", baselines.sleep_total_min, scores.sleep, "--color-sleep", "col-4") }}
+</section>
+
+<!-- 3. Scheda andamento con banda di baseline e Ipnogramma a gradini -->
+<h3 class="section-title">3. Grafico Andamento con Banda di Baseline e Ipnogramma a Gradini</h3>
+<section class="grid-12">
+  <article class="card col-6">
+    <div class="card-header">
+      <span class="card-label" style="color: var(--color-recovery);">Banda HRV (ln rMSSD 7g vs 60g ± k·SD)</span>
+      <span class="quality-pill">n={{ hrv_band.n_samples }}</span>
+    </div>
+    <div id="design-hrv-chart" class="chart-box"></div>
+  </article>
+
+  <article class="card col-6">
+    <div class="card-header">
+      <span class="card-label" style="color: var(--color-sleep);">Ipnogramma a Gradini (Veglia, REM, Leggero, Profondo)</span>
+      <span class="quality-pill">{{ sleep_arch.value.estimated_cycles if sleep_arch.calculable else "—" }} cicli</span>
+    </div>
+    <div id="design-hypno-chart" class="chart-box"></div>
+  </article>
+</section>
+
+<!-- 4. Stati vuoti e speciali -->
+<h3 class="section-title">4. Stati Vuoti e Speciali</h3>
+<section class="grid-12">
+  <article class="card col-3">
+    <div class="card-label">Stato: Dato Assente</div>
+    <div class="state-box" style="margin-top: var(--space-3);">
+      <strong>Dato assente</strong> — L'orologio non è stato indossato durante la notte selezionata (valore <code>NULL</code>, mai mostrato come 0).
+    </div>
+  </article>
+
+  <article class="card col-3">
+    <div class="card-label">Stato: Calibrazione in Corso</div>
+    <div class="state-box" style="margin-top: var(--space-3);">
+      <strong>Calibrazione in corso (9/14 giorni)</strong> — Servono almeno 14 giorni validi negli ultimi 30 per calcolare la mediana e il MAD.
+    </div>
+  </article>
+
+  <article class="card col-3">
+    <div class="card-label">Stato: Caricamento (Scheletro)</div>
+    <div style="margin-top: var(--space-3);">
+      <div class="skeleton-line" style="width: 65%;"></div>
+      <div class="skeleton-line" style="width: 90%;"></div>
+      <div class="skeleton-line" style="width: 45%;"></div>
+    </div>
+  </article>
+
+  <article class="card col-3">
+    <div class="card-label">Stato: Non Calcolabile / Sync</div>
+    <div class="state-box" style="margin-top: var(--space-3);">
+      <strong>Non calcolabile</strong> — Risoluzione post-attività insufficiente (registrazione interrotta subito a fine sforzo).
+    </div>
+  </article>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var hrvSeries = {{ (hrv_band.value.series[-30:] if hrv_band and hrv_band.calculable else []) | tojson }};
+    window.GarminDashboardUI.renderTrendWithBandChart("design-hrv-chart", hrvSeries, {
+      valueKey: "hrv_ms",
+      overlayKey: "hrv_7d_ms",
+      bandLowKey: "ms_band_low",
+      bandHighKey: "ms_band_high",
+      seriesName: "HRV Notte",
+      overlayName: "Media 7g",
+      bandLabel: "Banda 60g ±0.75 SD",
+      unit: "ms",
+      colorToken: "--color-recovery"
+    });
+
+    var hypnoIntervals = {{ (sleep_arch.value.hypnogram if sleep_arch and sleep_arch.calculable else []) | tojson }};
+    window.GarminDashboardUI.renderHypnogramChart("design-hypno-chart", hypnoIntervals);
+  });
+</script>
+{% endblock %}

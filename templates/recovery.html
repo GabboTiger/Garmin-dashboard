@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% from "_macros.html" import render_score_ring, render_metric_card %}
+
+{% block title %}Recupero — Garmin Personal Dashboard{% endblock %}
+
+{% block content %}
+<section class="grid-12">
+  {{ render_score_ring(scores.recovery, '--color-recovery') }}
+
+  <article class="card col-8">
+    <div class="card-header">
+      <span class="card-label" style="color: var(--color-recovery);">Banda HRV Individuale (ln rMSSD 7g vs 60g ± k·SD)</span>
+      <span class="quality-pill">n={{ hrv_band.n_samples if hrv_band else 0 }} notti</span>
+    </div>
+    {% if hrv_band and hrv_band.calculable %}
+      <div id="recovery-hrv-band-chart" class="chart-box"></div>
+    {% else %}
+      <div class="state-box">{{ hrv_band.reason if hrv_band else "Dati HRV insufficienti." }}</div>
+    {% endif %}
+  </article>
+</section>
+
+<!-- Metriche autonomiche e Body Battery -->
+<h2 class="section-title">Parametri Autonomici, Variabilità (CV) e Ricarica Body Battery</h2>
+{% set hb_latest = hrv_band.value.latest if hrv_band and hrv_band.calculable else {} %}
+{% set bbr_val = bb_recharge.value if bb_recharge and bb_recharge.calculable else {} %}
+<section class="grid-12">
+  {{ render_metric_card("ln(rMSSD) 7 giorni", hb_latest.get("ln_rmssd_7d"), "ln(ms)", None, hrv_band, "--color-recovery", "col-3") }}
+  {{ render_metric_card("CV HRV (7 giorni)", hb_latest.get("cv_7d_pct"), "%", None, hrv_band, "--color-recovery", "col-3") }}
+  {{ render_metric_card("Ricarica Body Battery", bbr_val.get("bb_charged"), "pt", baselines.bb_charged, bb_recharge, "--color-recovery", "col-3") }}
+  {{ render_metric_card("Velocità Ricarica BB", bbr_val.get("recharge_rate_pt_per_hour"), "pt/h", None, bb_recharge, "--color-recovery", "col-3") }}
+</section>
+
+<!-- FC a riposo e Stress a 30 giorni -->
+<h2 class="section-title">Andamento FC a Riposo (30 giorni)</h2>
+<section class="card" style="margin-bottom: var(--space-6);">
+  <div id="recovery-rhr-chart" class="chart-box"></div>
+</section>
+
+<!-- Studio di Evento: Effetto Sedute Dure vs Facili/Riposo (Bootstrap IC 95%) -->
+<h2 class="section-title">Effetto Allenamento → Recupero della Notte Successiva (Bootstrap IC 95%)</h2>
+<section class="card">
+  {% if train_effect and train_effect.calculable %}
+    {% set te = train_effect.value %}
+    <div class="card-header">
+      <span class="card-label" style="color: var(--color-recovery);">
+        Confronto dopo Sedute Dure (n={{ te.n_hard_sessions }}, TRIMP ≥ {{ te.hard_load_threshold_trimp }})
+        vs Facili ({{ te.n_easy_sessions }}) e Riposo ({{ te.n_rest_days }})
+      </span>
+      <button type="button" class="quality-pill" data-detail-json='{{ train_effect | tojson }}'>Come si calcola ▸</button>
+    </div>
+
+    <div class="grid-12" style="margin-bottom: 0;">
+      <div class="state-box col-6">
+        <div class="card-label">Effetto medio su HRV Notturna (t+1)</div>
+        <div class="card-value-md" style="margin: var(--space-2) 0;">
+          {{ te.hrv_next_night.diff_hard_vs_non_hard_ms }} ms
+        </div>
+        <div>
+          IC 95% Bootstrap: <strong>[{{ te.hrv_next_night.ci95_low_ms }}, {{ te.hrv_next_night.ci95_high_ms }}] ms</strong><br>
+          Media dopo seduta dura: {{ te.hrv_next_night.mean_after_hard_ms }} ms ·
+          Dopo facile: {{ te.hrv_next_night.mean_after_easy_ms }} ms ·
+          Dopo riposo: {{ te.hrv_next_night.mean_after_rest_ms }} ms
+        </div>
+      </div>
+
+      <div class="state-box col-6">
+        <div class="card-label">Effetto medio su FC a Riposo (t+1)</div>
+        <div class="card-value-md" style="margin: var(--space-2) 0;">
+          {% if te.rhr_next_night.diff_hard_vs_non_hard_bpm > 0 %}+{% endif %}{{ te.rhr_next_night.diff_hard_vs_non_hard_bpm }} bpm
+        </div>
+        <div>
+          IC 95% Bootstrap: <strong>[{{ te.rhr_next_night.ci95_low_bpm }}, {{ te.rhr_next_night.ci95_high_bpm }}] bpm</strong><br>
+          Media dopo seduta dura: {{ te.rhr_next_night.mean_after_hard_bpm }} bpm ·
+          Dopo facile: {{ te.rhr_next_night.mean_after_easy_bpm }} bpm ·
+          Dopo riposo: {{ te.rhr_next_night.mean_after_rest_bpm }} bpm
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="state-box">{{ train_effect.reason if train_effect else "Non calcolabile." }}</div>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var hrvSeries = {{ (hrv_band.value.series[-60:] if hrv_band and hrv_band.calculable else []) | tojson }};
+    window.GarminDashboardUI.renderTrendWithBandChart("recovery-hrv-band-chart", hrvSeries, {
+      valueKey: "ln_rmssd",
+      overlayKey: "ln_rmssd_7d",
+      bandLowKey: "ln_band_low",
+      bandHighKey: "ln_band_high",
+      seriesName: "ln(rMSSD) Notte",
+      overlayName: "Media 7g",
+      bandLabel: "Banda 60g ±k·SD",
+      unit: "ln(ms)",
+      colorToken: "--color-recovery"
+    });
+
+    var rhrSeries = {{ (rhr_trend.value.series if rhr_trend and rhr_trend.calculable else []) | tojson }};
+    window.GarminDashboardUI.renderTrendWithBandChart("recovery-rhr-chart", rhrSeries, {
+      valueKey: "value",
+      overlayKey: "ewma_7d",
+      seriesName: "FC a Riposo",
+      overlayName: "EWMA 7g",
+      unit: "bpm",
+      colorToken: "--color-recovery"
+    });
+  });
+</script>
+{% endblock %}

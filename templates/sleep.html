@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% from "_macros.html" import render_score_ring, render_metric_card %}
+
+{% block title %}Sonno — Garmin Personal Dashboard{% endblock %}
+
+{% block content %}
+<section class="grid-12">
+  {{ render_score_ring(scores.sleep, '--color-sleep') }}
+
+  <!-- Ipnogramma a gradini -->
+  <article class="card col-8">
+    <div class="card-header">
+      <span class="card-label" style="color: var(--color-sleep);">Ipnogramma a Gradini della Notte ({{ day }})</span>
+      <span class="quality-pill">
+        {% if sleep_arch and sleep_arch.calculable %}
+          {{ sleep_arch.value.estimated_cycles or "—" }} cicli · Efficienza {{ sleep_arch.value.efficiency_pct }}%
+        {% else %}
+          dato assente
+        {% endif %}
+      </span>
+    </div>
+    {% if sleep_arch and sleep_arch.calculable and sleep_arch.value.hypnogram %}
+      <div id="sleep-hypno-chart" class="chart-box"></div>
+    {% else %}
+      <div class="state-box">Ipnogramma non disponibile per questa notte.</div>
+    {% endif %}
+  </article>
+</section>
+
+<!-- Architettura del sonno (Fasi, Latenze, Risvegli, Cicli) -->
+<h2 class="section-title">Architettura del Sonno e Cicli</h2>
+{% set arch_v = sleep_arch.value if sleep_arch and sleep_arch.calculable else {} %}
+<section class="grid-12">
+  {{ render_metric_card("Efficienza Sonno", arch_v.get("efficiency_pct"), "%", None, sleep_arch, "--color-sleep", "col-3") }}
+  {{ render_metric_card("Sonno Profondo", arch_v.get("deep_pct"), "%", None, sleep_arch, "--color-sleep", "col-3") }}
+  {{ render_metric_card("Sonno REM", arch_v.get("rem_pct"), "%", None, sleep_arch, "--color-sleep", "col-3") }}
+  {{ render_metric_card("Risvegli (≥2 min)", arch_v.get("awakenings_count"), "eventi", None, sleep_arch, "--color-sleep", "col-3") }}
+  {{ render_metric_card("Latenza 1° Profondo", arch_v.get("latency_to_deep_min"), "min", None, sleep_arch, "--color-sleep", "col-4") }}
+  {{ render_metric_card("Latenza 1° REM", arch_v.get("latency_to_rem_min"), "min", None, sleep_arch, "--color-sleep", "col-4") }}
+  {{ render_metric_card("Cicli NREM→REM", arch_v.get("estimated_cycles"), "cicli", None, sleep_arch, "--color-sleep", "col-4") }}
+</section>
+
+<!-- Regolarità (30g), Social Jetlag, SRI e Fisiologia Notturna / Debito -->
+<h2 class="section-title">Regolarità degli Orari, Fisiologia Notturna e Debito di Sonno</h2>
+{% set reg_v = sleep_reg.value if sleep_reg and sleep_reg.calculable else {} %}
+{% set phys_v = sleep_phys.value if sleep_phys and sleep_phys.calculable else {} %}
+<section class="grid-12">
+  {{ render_metric_card("Indice Regolarità (SRI)", reg_v.get("sri_score"), "/ 100", None, sleep_reg, "--color-sleep", "col-3") }}
+  {{ render_metric_card("Metà del Sonno Media", reg_v.get("midsleep_mean_hhmm"), "ora", None, sleep_reg, "--color-sleep", "col-3") }}
+  {{ render_metric_card("Social Jetlag (WE vs Fer.)", reg_v.get("social_jetlag_min"), "min", None, sleep_reg, "--color-sleep", "col-3") }}
+  {{ render_metric_card("Variabilità Addormentamento", reg_v.get("bedtime_sd_min"), "min SD", None, sleep_reg, "--color-sleep", "col-3") }}
+
+  {{ render_metric_card("FC Minima Notturna", phys_v.get("min_hr_bpm"), "bpm (" ~ (phys_v.get("min_hr_time_hhmm") or "—") ~ ")", None, sleep_phys, "--color-recovery", "col-3") }}
+  {{ render_metric_card("Tempo SpO2 < " ~ (phys_v.get("spo2_threshold_pct") or 92) ~ "%", phys_v.get("spo2_below_threshold_min"), "min", None, sleep_phys, "--color-sleep", "col-3") }}
+  {{ render_metric_card("Debito Sonno (7 giorni)", phys_v.get("sleep_debt_7d_hours"), "h", None, sleep_phys, "--color-sleep", "col-3") }}
+  {{ render_metric_card("Debito Sonno (14 giorni)", phys_v.get("sleep_debt_14d_hours"), "h", None, sleep_phys, "--color-sleep", "col-3") }}
+</section>
+
+<!-- Trend a 30 giorni della durata del sonno -->
+<h2 class="section-title">Andamento Durata del Sonno (ultimi 30 giorni)</h2>
+<section class="card">
+  <div id="sleep-trend-30d" class="chart-box"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var hypnoIntervals = {{ (sleep_arch.value.hypnogram if sleep_arch and sleep_arch.calculable else []) | tojson }};
+    if (hypnoIntervals.length > 0) {
+      window.GarminDashboardUI.renderHypnogramChart("sleep-hypno-chart", hypnoIntervals);
+    }
+
+    var sleepSeries = {{ (sleep_trend.value.series if sleep_trend and sleep_trend.calculable else []) | tojson }};
+    window.GarminDashboardUI.renderTrendWithBandChart("sleep-trend-30d", sleepSeries, {
+      valueKey: "value",
+      overlayKey: "sma_7d",
+      seriesName: "Sonno (min)",
+      overlayName: "Media mobile 7g",
+      unit: "min",
+      colorToken: "--color-sleep"
+    });
+  });
+</script>
+{% endblock %}

@@ -690,3 +690,4 @@ def compute_speed_hr_efficiency(activity_row: dict[str, Any]) -> dict[str, Any]:
         how_it_works=hw,
         extra={"speed_m_per_min": round(speed_m_per_min, 1)},
     )
+

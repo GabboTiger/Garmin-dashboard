@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% from "_macros.html" import render_score_ring, render_metric_card %}
+
+{% block title %}Attività — Garmin Personal Dashboard{% endblock %}
+
+{% block content %}
+<section class="grid-12">
+  {{ render_score_ring(scores.strain, '--color-strain') }}
+
+  <article class="card col-8">
+    <div class="card-header">
+      <span class="card-label" style="color: var(--color-strain);">Carico Acuto (ATL 7g), Cronico (CTL 28g) e Bilancio (TSB)</span>
+      {% if load_stats and load_stats.calculable %}
+        <button type="button" class="quality-pill" data-detail-json='{{ load_stats | tojson }}'>
+          ACWR: {{ load_stats.value.acwr or "—" }} · Come si calcola ▸
+        </button>
+      {% endif %}
+    </div>
+    {% if load_stats and load_stats.calculable %}
+      <div id="activities-load-chart" class="chart-box"></div>
+    {% else %}
+      <div class="state-box">{{ load_stats.reason if load_stats else "Dati di carico insufficienti." }}</div>
+    {% endif %}
+  </article>
+</section>
+
+<!-- Metriche di carico e distribuzione zone -->
+<h2 class="section-title">Sintesi Carico e Distribuzione Settimanale Zone FC</h2>
+{% set ls_val = load_stats.value if load_stats and load_stats.calculable else {} %}
+{% set wz_val = weekly_zones.value if weekly_zones and weekly_zones.calculable else {} %}
+<section class="grid-12">
+  {{ render_metric_card("Carico Acuto (ATL 7g)", ls_val.get("atl_7d"), "TRIMP/g", None, load_stats, "--color-strain", "col-3") }}
+  {{ render_metric_card("Carico Cronico (CTL 28g)", ls_val.get("ctl_28d"), "TRIMP/g", None, load_stats, "--color-strain", "col-3") }}
+  {{ render_metric_card("Bilancio TSB (Fitness-Fatica)", ls_val.get("tsb_form"), "pt", None, load_stats, "--color-strain", "col-3") }}
+  {{ render_metric_card("Rapporto ACWR", ls_val.get("acwr"), "ratio", None, load_stats, "--color-strain", "col-3") }}
+
+  {{ render_metric_card("Tempo Zone 7g (Totale)", wz_val.get("total_zone_minutes"), "min", None, weekly_zones, "--color-strain", "col-4") }}
+  {{ render_metric_card("Quota Bassa Intensità (Z1+Z2)", wz_val.get("low_intensity_z1_z2_pct"), "%", None, weekly_zones, "--color-strain", "col-4") }}
+  {{ render_metric_card("Quota Alta Intensità (Z4+Z5)", wz_val.get("high_intensity_z4_z5_pct"), "%", None, weekly_zones, "--color-strain", "col-4") }}
+</section>
+
+<!-- Elenco attività con analisi HRR, Deriva, TRIMP ed Efficienza -->
+<h2 class="section-title">Elenco Attività Registrate (clicca una riga per aprire formule e qualità)</h2>
+<section class="card">
+  {% if activities %}
+  <div class="table-wrap">
+    <table class="table-clean">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Attività</th>
+          <th>Tipo</th>
+          <th>Durata</th>
+          <th>Distanza</th>
+          <th>FC (med / max)</th>
+          <th>TRIMP</th>
+          <th>HRR (60s / 120s)</th>
+          <th>Deriva FC</th>
+          <th>Efficienza</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for act in activities %}
+        <tr
+          style="cursor: pointer;"
+          data-detail-json='{{ {"title": (act.name or act.type) ~ " (" ~ act.day ~ ")", "display_value": act.trimp.value if act.trimp.calculable else "—", "unit": "TRIMP", "subtitle": "HRR, Deriva Cardiaca, TRIMP ed Efficienza", "assumptions": (act.hrr.assumptions + act.drift.assumptions + act.trimp.assumptions), "how_it_works": act.drift.how_it_works} | tojson }}'
+        >
+          <td>{{ act.day }}</td>
+          <td><strong>{{ act.name or "—" }}</strong></td>
+          <td>{{ act.type }}</td>
+          <td>{% if act.duration_s is not none %}{{ (act.duration_s / 60)|round|int }} min{% else %}dato assente{% endif %}</td>
+          <td>{% if act.distance_m and act.distance_m > 0 %}{{ (act.distance_m / 1000)|round(2) }} km{% else %}—{% endif %}</td>
+          <td>
+            {% if act.hr_avg is not none %}{{ act.hr_avg|int }} / {{ act.hr_max|int if act.hr_max else "—" }} bpm{% else %}dato assente{% endif %}
+          </td>
+          <td>
+            {% if act.trimp and act.trimp.calculable %}
+              <strong>{{ act.trimp.value }}</strong>
+            {% else %}
+              <span class="quality-pill">non calcolabile</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if act.hrr and act.hrr.calculable %}
+              <strong>-{{ act.hrr.value.hrr_60_bpm }}</strong>
+              {% if act.hrr.value.hrr_120_bpm is not none %}/ -{{ act.hrr.value.hrr_120_bpm }}{% endif %} bpm
+            {% else %}
+              <span class="quality-pill" title="{{ act.hrr.reason if act.hrr else '' }}">non calcolabile</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if act.drift and act.drift.calculable %}
+              <strong>{{ act.drift.value.hr_drift_pct }}%</strong>
+              <span style="font-size: var(--text-xs); color: var(--text-secondary);"> (Pa:Hr {{ act.drift.value.aerobic_decoupling_pct }}%)</span>
+            {% else %}
+              <span class="quality-pill" title="{{ act.drift.reason if act.drift else '' }}">non calcolabile</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if act.efficiency and act.efficiency.calculable %}
+              <strong>{{ act.efficiency.value }}</strong> m/b
+            {% else %}
+              —
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="state-box">Nessuna attività presente nell'archivio.</div>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var loadSeries = {{ (load_stats.value.series[-60:] if load_stats and load_stats.calculable else []) | tojson }};
+    if (loadSeries.length > 0 && typeof Plotly !== "undefined") {
+      var x = loadSeries.map(function (d) { return d.day; });
+      var atl = loadSeries.map(function (d) { return d.atl_7d; });
+      var ctl = loadSeries.map(function (d) { return d.ctl_28d; });
+      var tsb = loadSeries.map(function (d) { return d.tsb_form; });
+      var layout = window.GarminDashboardUI.basePlotlyLayout("TRIMP/g");
+      Plotly.newPlot(
+        "activities-load-chart",
+        [
+          { x: x, y: atl, type: "scatter", mode: "lines", name: "Fatica (ATL 7g)", line: { color: "#FB923C", width: 2 } },
+          { x: x, y: ctl, type: "scatter", mode: "lines", name: "Fitness (CTL 28g)", line: { color: "#2DD4BF", width: 2 } },
+          { x: x, y: tsb, type: "bar", name: "Bilancio TSB", marker: { color: "rgba(161,161,170,0.3)" } }
+        ],
+        layout,
+        { displayModeBar: false, responsive: true }
+      );
+    }
+  });
+</script>
+{% endblock %}

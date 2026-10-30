@@ -1,0 +1,93 @@
+{# Macro riutilizzabili del Design System (Bevel / Apple Health style) #}
+
+{% macro render_score_ring(score_obj, area_color_var) %}
+  {% set val = score_obj.score if score_obj and score_obj.score is not none else (score_obj.provisional_score if score_obj else None) %}
+  {% set pct = (val if val is not none else 0) %}
+  {% set circumference = 339.29 %}
+  {% set dash_offset = circumference - (circumference * pct / 100.0) %}
+  <button
+    type="button"
+    class="card card-interactive col-4"
+    data-detail-json='{{ score_obj | tojson }}'
+    aria-label="Apri scomposizione e formula per {{ score_obj.name if score_obj else 'Punteggio' }}"
+  >
+    <div class="card-header" style="width: 100%;">
+      <span class="card-label" style="color: var({{ area_color_var }});">{{ score_obj.name if score_obj else "—" }}</span>
+      <span class="quality-pill">{{ score_obj.status_label if score_obj else "dato assente" }}</span>
+    </div>
+
+    <div class="ring-wrapper" style="width: 100%;">
+      <div class="ring-svg-box">
+        <svg class="ring-svg" viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="ring-track" cx="60" cy="60" r="54"></circle>
+          <circle
+            class="ring-progress"
+            cx="60"
+            cy="60"
+            r="54"
+            style="stroke: var({{ area_color_var }}); stroke-dasharray: {{ circumference }}; stroke-dashoffset: {{ dash_offset }};"
+          ></circle>
+        </svg>
+        <div class="ring-center">
+          <span class="ring-number">
+            {% if score_obj and score_obj.score is not none %}
+              {{ score_obj.score }}
+            {% elif score_obj and score_obj.provisional_score is not none %}
+              {{ score_obj.provisional_score }}*
+            {% else %}
+              —
+            {% endif %}
+          </span>
+          <span class="ring-sub">/ 100</span>
+        </div>
+      </div>
+      <div style="font-size: var(--text-xs); color: var(--text-secondary);">
+        Tocca per aprire scomposizione e formula
+      </div>
+    </div>
+  </button>
+{% endmacro %}
+
+
+{% macro render_metric_card(label, value, unit, baseline_obj=None, detail_obj=None, area_color_var=None, col_class="col-3") %}
+  <button
+    type="button"
+    class="card card-interactive {{ col_class }}"
+    {% if detail_obj %}data-detail-json='{{ detail_obj | tojson }}'{% endif %}
+  >
+    <div>
+      <div class="card-header">
+        <span class="card-label" {% if area_color_var %}style="color: var({{ area_color_var }});"{% endif %}>{{ label }}</span>
+        {% if detail_obj and detail_obj.quality_flag %}
+          <span class="quality-pill">n={{ detail_obj.n_samples }} · {{ detail_obj.quality_flag }}</span>
+        {% endif %}
+      </div>
+
+      <div class="card-value">
+        {% if value is not none %}
+          {{ value }}<span class="card-unit">{{ unit }}</span>
+        {% else %}
+          <span style="font-size: var(--text-lg); color: var(--text-muted); font-weight: 600;">Dato assente</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="baseline-delta">
+      {% if baseline_obj and baseline_obj.status == "ok" %}
+        <span class="baseline-arrow" aria-hidden="true">{{ baseline_obj.direction_arrow }}</span>
+        <span>
+          <strong>{{ baseline_obj.direction_text }}</strong>
+          · mediana 30g: {{ baseline_obj.median }} {{ unit }}
+        </span>
+      {% elif baseline_obj and baseline_obj.status == "calibrating" %}
+        <span class="baseline-arrow" aria-hidden="true">—</span>
+        <span>Calibrazione in corso ({{ baseline_obj.n_days }}/{{ baseline_obj.min_required_days }}g)</span>
+      {% elif detail_obj and not detail_obj.calculable %}
+        <span class="baseline-arrow" aria-hidden="true">!</span>
+        <span>Non calcolabile: {{ detail_obj.reason }}</span>
+      {% else %}
+        <span style="color: var(--text-muted); font-size: var(--text-xs);">Clicca per dettagli e formula</span>
+      {% endif %}
+    </div>
+  </button>
+{% endmacro %}

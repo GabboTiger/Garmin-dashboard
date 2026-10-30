@@ -130,3 +130,4 @@ def test_trimp_zones_ewma_and_efficiency() -> None:
     assert load_res["n_samples"] == 90
     assert load_res["value"]["ctl_28d"] > 0
     assert len(load_res["value"]["series"]) == 90
+

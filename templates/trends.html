@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% from "_macros.html" import render_metric_card %}
+
+{% block title %}Tendenze — Garmin Personal Dashboard{% endblock %}
+
+{% block content %}
+<h2 class="section-title">Tendenze Statistiche (Theil-Sen, Mann-Kendall, CUSUM e Anomalie z robusto)</h2>
+<section class="grid-12">
+  {% for item in trend_items %}
+    {% set t_obj = item.trend %}
+    {% set tv = t_obj.value if t_obj and t_obj.calculable else {} %}
+    {% set mk = tv.get("theil_sen_mann_kendall", {}) %}
+    {{ render_metric_card(
+      item.label ~ " (Pendenza 7g)",
+      mk.get("slope_per_week"),
+      item.unit ~ "/sett",
+      None,
+      t_obj,
+      item.color_var,
+      "col-4"
+    ) }}
+  {% endfor %}
+</section>
+
+<h2 class="section-title">Andamento HRV, Sonno e FC a Riposo (con Media Mobile)</h2>
+<section class="card">
+  <div id="trends-main-chart" class="chart-box"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var hrvSeries = {{ (hrv_trend.value.series if hrv_trend and hrv_trend.calculable else []) | tojson }};
+    window.GarminDashboardUI.renderTrendWithBandChart("trends-main-chart", hrvSeries, {
+      valueKey: "value",
+      overlayKey: "ewma_7d",
+      seriesName: "HRV Notturna",
+      overlayName: "EWMA 7g",
+      unit: "ms",
+      colorToken: "--color-recovery"
+    });
+  });
+</script>
+{% endblock %}

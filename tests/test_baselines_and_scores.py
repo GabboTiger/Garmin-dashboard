@@ -120,3 +120,4 @@ def test_strain_and_sleep_scores_on_synthetic_data() -> None:
         assert 0 <= item["score"] <= 100
         assert len(item["components"]) >= 1
         assert "non costituiscono indicazioni" in item["disclaimer"]
+

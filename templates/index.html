@@ -1,131 +1,99 @@
-<!doctype html>
-<html lang="it">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Garmin Personal Dashboard</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
-</head>
-<body>
-  <div class="container">
-    <header class="header-bar">
-      <div>
-        <h1 class="brand-title">Garmin Personal Dashboard</h1>
-        <p class="card-sub">Giorno selezionato: <strong>{{ day }}</strong> ({{ total_days }} giorni in archivio)</p>
-      </div>
-      <div>
-        <span class="badge-mode">
-          {% if demo_mode %}MODALITÀ DEMO (90 giorni sintetici){% else %}DATI REALI GARMIN{% endif %}
-        </span>
-      </div>
-    </header>
+{% extends "base.html" %}
+{% from "_macros.html" import render_score_ring, render_metric_card %}
 
-    {% if latest %}
-    <section class="grid-cards" aria-label="Metriche del giorno">
-      <article class="card">
-        <div class="card-label" style="color: var(--color-sleep);">Sonno totale</div>
-        <div class="card-value">
-          {% if latest.sleep_total_min is not none %}
-            {{ (latest.sleep_total_min // 60)|int }}h {{ (latest.sleep_total_min % 60)|int }}m
-          {% else %}
-            <span style="font-size: var(--text-xl); color: var(--text-muted);">Dato assente</span>
-          {% endif %}
-        </div>
-        <div class="card-sub">
-          Punteggio sonno:
-          {% if latest.sleep_score is not none %}{{ latest.sleep_score|int }} / 100{% else %}dato assente{% endif %}
-        </div>
-      </article>
+{% block title %}Oggi — Garmin Personal Dashboard{% endblock %}
 
-      <article class="card">
-        <div class="card-label" style="color: var(--color-recovery);">HRV notturna</div>
-        <div class="card-value">
-          {% if latest.hrv_night_ms is not none %}
-            {{ latest.hrv_night_ms }}<span class="card-unit">ms</span>
-          {% else %}
-            <span style="font-size: var(--text-xl); color: var(--text-muted);">Dato assente</span>
-          {% endif %}
-        </div>
-        <div class="card-sub">
-          FC a riposo:
-          {% if latest.rhr_bpm is not none %}{{ latest.rhr_bpm|int }} bpm{% else %}dato assente{% endif %}
-        </div>
-      </article>
+{% block content %}
+<!-- 1. Tre anelli di punteggio cliccabili (scomposizione + come si calcola) -->
+<section class="grid-12" aria-label="Punteggi di oggi">
+  {{ render_score_ring(scores.recovery, '--color-recovery') }}
+  {{ render_score_ring(scores.strain, '--color-strain') }}
+  {{ render_score_ring(scores.sleep, '--color-sleep') }}
+</section>
 
-      <article class="card">
-        <div class="card-label" style="color: var(--color-recovery);">Body Battery &amp; Stress</div>
-        <div class="card-value">
-          {% if latest.bb_max is not none %}
-            {{ latest.bb_max|int }}<span class="card-unit">max</span>
-          {% else %}
-            <span style="font-size: var(--text-xl); color: var(--text-muted);">Dato assente</span>
-          {% endif %}
-        </div>
-        <div class="card-sub">
-          Stress medio:
-          {% if latest.stress_avg is not none %}{{ latest.stress_avg }} / 100{% else %}dato assente{% endif %}
-        </div>
-      </article>
+<!-- 2. Metriche chiave con scostamento neutro dalla baseline a 30 giorni -->
+<h2 class="section-title">Metriche Chiave vs Baseline Personale (30 giorni)</h2>
+{% if latest %}
+<section class="grid-12" aria-label="Metriche chiave">
+  {{ render_metric_card("HRV Notturna", latest.hrv_night_ms, "ms", baselines.hrv_night_ms, hrv_band, "--color-recovery", "col-3") }}
+  {{ render_metric_card("FC a Riposo", latest.rhr_bpm|int if latest.rhr_bpm is not none else None, "bpm", baselines.rhr_bpm, scores.recovery, "--color-recovery", "col-3") }}
+  {{ render_metric_card("Sonno Totale", (latest.sleep_total_min / 60)|round(1) if latest.sleep_total_min is not none else None, "h", baselines.sleep_total_min, sleep_arch, "--color-sleep", "col-3") }}
+  {{ render_metric_card("Body Battery Max", latest.bb_max|int if latest.bb_max is not none else None, "pt", baselines.bb_max, bb_recharge, "--color-recovery", "col-3") }}
+  {{ render_metric_card("Stress Medio", latest.stress_avg, "pt", baselines.stress_avg, None, None, "col-3") }}
+  {{ render_metric_card("Passi Giornalieri", latest.steps, "passi", baselines.steps, scores.strain, "--color-strain", "col-3") }}
+  {{ render_metric_card("Respirazione Notte", latest.respiration_sleep_brpm, "atti/m", baselines.respiration_sleep_brpm, sleep_phys, "--color-sleep", "col-3") }}
+  {{ render_metric_card("SpO2 Notturna", latest.spo2_sleep_avg_pct, "%", baselines.spo2_sleep_avg_pct, sleep_phys, "--color-sleep", "col-3") }}
+</section>
+{% endif %}
 
-      <article class="card">
-        <div class="card-label" style="color: var(--color-strain);">Movimento quotidiano</div>
-        <div class="card-value">
-          {% if latest.steps is not none %}
-            {{ latest.steps }}<span class="card-unit">passi</span>
-          {% else %}
-            <span style="font-size: var(--text-xl); color: var(--text-muted);">Dato assente</span>
-          {% endif %}
-        </div>
-        <div class="card-sub">
-          Calorie attive:
-          {% if latest.calories_active is not none %}{{ latest.calories_active|int }} kcal{% else %}dato assente{% endif %}
-        </div>
-      </article>
-    </section>
-    {% else %}
-    <section class="card" style="margin-bottom: var(--space-6);">
-      <p>Nessun dato presente nel database. Esegui <code>./env/bin/python -m app.cli sync --days 30</code> (oppure attiva <code>DEMO_MODE=1</code>).</p>
-    </section>
-    {% endif %}
-
-    <section class="card">
-      <div class="card-label">Ultime attività registrate</div>
-      {% if activities %}
-      <table class="table-clean">
-        <thead>
-          <tr>
-            <th>Data</th>
-            <th>Attività</th>
-            <th>Tipo</th>
-            <th>Durata</th>
-            <th>Distanza</th>
-            <th>FC media</th>
-            <th>Carico</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for act in activities %}
-          <tr>
-            <td>{{ act.day }}</td>
-            <td>{{ act.name or "—" }}</td>
-            <td>{{ act.type }}</td>
-            <td>{% if act.duration_s is not none %}{{ (act.duration_s / 60)|round(0)|int }} min{% else %}dato assente{% endif %}</td>
-            <td>{% if act.distance_m is not none and act.distance_m > 0 %}{{ (act.distance_m / 1000)|round(2) }} km{% else %}—{% endif %}</td>
-            <td>{% if act.hr_avg is not none %}{{ act.hr_avg|int }} bpm{% else %}dato assente{% endif %}</td>
-            <td>{% if act.training_load is not none %}{{ act.training_load|round(1) }}{% else %}dato assente{% endif %}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <p class="card-sub">Nessuna attività presente nell'intervallo selezionato.</p>
-      {% endif %}
-    </section>
-
-    <p class="notice-disclaimer">
-      Metriche ed euristiche personali a scopo informativo, non costituiscono indicazioni mediche.
-    </p>
+<!-- 3. Ultime attività registrate con HRR, Deriva, TRIMP ed Efficienza -->
+<h2 class="section-title">Ultime Attività e Analisi Algoritmiche</h2>
+<section class="card">
+  {% if activities %}
+  <div class="table-wrap">
+    <table class="table-clean">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Attività</th>
+          <th>Durata</th>
+          <th>Distanza</th>
+          <th>FC Media</th>
+          <th>TRIMP</th>
+          <th>HRR (60s / 120s)</th>
+          <th>Deriva FC</th>
+          <th>Efficienza</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for act in activities %}
+        <tr
+          style="cursor: pointer;"
+          data-detail-json='{{ {"title": (act.name or act.type) ~ " (" ~ act.day ~ ")", "display_value": act.trimp.value if act.trimp.calculable else "—", "unit": "TRIMP", "subtitle": "Analisi intra e post-attività", "assumptions": (act.hrr.assumptions + act.drift.assumptions + act.trimp.assumptions), "how_it_works": act.hrr.how_it_works} | tojson }}'
+        >
+          <td>{{ act.day }}</td>
+          <td><strong>{{ act.name or act.type }}</strong></td>
+          <td>{% if act.duration_s is not none %}{{ (act.duration_s / 60)|round|int }} min{% else %}dato assente{% endif %}</td>
+          <td>{% if act.distance_m and act.distance_m > 0 %}{{ (act.distance_m / 1000)|round(2) }} km{% else %}—{% endif %}</td>
+          <td>{% if act.hr_avg is not none %}{{ act.hr_avg|int }} bpm{% else %}dato assente{% endif %}</td>
+          <td>
+            {% if act.trimp and act.trimp.calculable %}
+              <strong>{{ act.trimp.value }}</strong>
+            {% else %}
+              <span class="quality-pill">non calcolabile</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if act.hrr and act.hrr.calculable %}
+              <strong>-{{ act.hrr.value.hrr_60_bpm }} bpm</strong>
+              {% if act.hrr.value.hrr_120_bpm is not none %}
+                <span style="color: var(--text-secondary);"> / -{{ act.hrr.value.hrr_120_bpm }} bpm</span>
+              {% endif %}
+            {% else %}
+              <span class="quality-pill" title="{{ act.hrr.reason if act.hrr else '' }}">non calcolabile</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if act.drift and act.drift.calculable %}
+              <strong>{{ act.drift.value.hr_drift_pct }}%</strong>
+            {% else %}
+              <span class="quality-pill" title="{{ act.drift.reason if act.drift else '' }}">non calcolabile</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if act.efficiency and act.efficiency.calculable %}
+              {{ act.efficiency.value }} m/b
+            {% else %}
+              —
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
-</body>
-</html>
-
+  {% else %}
+  <div class="state-box">Nessuna attività presente nell'archivio.</div>
+  {% endif %}
+</section>
+{% endblock %}

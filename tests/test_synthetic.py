@@ -65,3 +65,4 @@ def test_synthetic_known_correlations_recovered() -> None:
     stress_to_bb = analysis.spearman_corr_with_lag(df, "stress_avg", "bb_max", lag_days=0)
     assert stress_to_bb["rho"] is not None
     assert stress_to_bb["rho"] < -0.55
+

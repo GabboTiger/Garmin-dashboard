@@ -287,3 +287,4 @@ def fetch_activities_range(
         params,
     )
     return [dict(r) for r in cur.fetchall()]
+

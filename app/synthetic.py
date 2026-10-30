@@ -259,3 +259,4 @@ def seed_synthetic_db(
         upsert_activity(conn, a)
     conn.commit()
     return {"daily_days": len(daily_rows), "activities": len(activities)}
+

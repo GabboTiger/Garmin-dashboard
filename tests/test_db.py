@@ -90,3 +90,4 @@ def test_activities_upsert_idempotent(tmp_path: Path) -> None:
     assert acts[0]["training_load"] == 90.0
     assert acts[0]["z1_s"] is None
     conn.close()
+

@@ -1,9 +1,10 @@
 /* ==========================================================================
-   DESIGN SYSTEM TOKENS & COMPONENTS — Garmin Personal Dashboard
-   Stile ispirato a Bevel & Apple Health: moderno, chiaro, ordinato, cifre tabulari,
-   un colore per area (Recupero verde acqua, Sforzo arancio, Sonno indaco),
-   tutto il resto in scala di grigi. Variazioni dalla baseline sempre grigie
-   con freccia (▲▼•) e testo, mai verde/rosso.
+   DESIGN SYSTEM TOKENS & COMPONENTS — Garmin Personal Dashboard (DARK THEME)
+   Stile moderno, scuro, ordinato, cifre tabulari, un colore per area:
+     - Recupero: verde acqua (#2DD4BF)
+     - Sforzo:   arancio     (#FB923C)
+     - Sonno:    indaco      (#818CF8)
+   Variazioni dalla baseline sempre in scala di grigi con freccia (▲▼•) e testo.
    ========================================================================== */
 
 :root {
@@ -12,8 +13,8 @@
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --font-math: "STIX Two Math", "Cambria Math", "Latin Modern Math", -apple-system, BlinkMacSystemFont, Georgia, serif;
 
-  --text-hero: 2.75rem;     /* 44px — numero protagonista */
-  --text-2xl: 1.875rem;     /* 30px */
+  --text-hero: 2.65rem;     /* 42.4px — numero protagonista */
+  --text-2xl: 1.85rem;      /* 29.6px */
   --text-xl: 1.35rem;       /* 21.6px */
   --text-lg: 1.125rem;      /* 18px */
   --text-base: 0.9375rem;   /* 15px */
@@ -32,54 +33,26 @@
   --space-12: 48px;
 
   /* Struttura e bordi */
-  --radius-card: 22px;
+  --radius-card: 20px;
   --radius-pill: 999px;
   --radius-sm: 12px;
-  --container-max: 1240px;
+  --container-max: 1260px;
 
-  /* Tema chiaro luminoso (default ad alta leggibilità stile Apple Health / Bevel) */
-  --bg-page: #F4F5F8;
-  --bg-card: #FFFFFF;
-  --bg-subtle: #ECEDF2;
-  --bg-overlay: rgba(15, 23, 42, 0.42);
-  --border-card: rgba(15, 23, 42, 0.08);
-  --shadow-card: 0 4px 18px rgba(15, 23, 42, 0.045);
-
-  --text-primary: #111827;
-  --text-secondary: #4B5563;
-  --text-muted: #6B7280;
-
-  /* Colori funzionali per area (contrasto AA verificato su bianco #FFFFFF) */
-  --color-recovery: #0D9488;
-  --color-recovery-soft: rgba(13, 148, 136, 0.13);
-  --color-strain: #EA580C;
-  --color-strain-soft: rgba(234, 88, 12, 0.13);
-  --color-sleep: #4F46E5;
-  --color-sleep-soft: rgba(79, 70, 229, 0.13);
-
-  /* Tre toni di indaco per l'ipnogramma + grigio per la veglia */
-  --hypno-awake: #9CA3AF;
-  --hypno-rem: #818CF8;
-  --hypno-light: #6366F1;
-  --hypno-deep: #3730A3;
-
-  --band-fill: rgba(100, 116, 139, 0.15);
-  --grid-line: rgba(15, 23, 42, 0.06);
-}
-
-/* Tema scuro (attivabile col selettore o con data-theme="dark") */
-:root[data-theme="dark"] {
-  --bg-page: #0E1015;
-  --bg-card: #181B22;
-  --bg-subtle: #232731;
-  --bg-overlay: rgba(0, 0, 0, 0.65);
+  /* Tema Scuro Unico (Bevel / Apple Health Dark) */
+  --bg-page: #0B0D12;
+  --bg-card: #151821;
+  --bg-subtle: #1E222E;
+  --bg-elevated: #252A38;
+  --bg-overlay: rgba(0, 0, 0, 0.72);
   --border-card: rgba(255, 255, 255, 0.09);
-  --shadow-card: none;
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.35);
 
   --text-primary: #F3F4F6;
-  --text-secondary: #9CA3AF;
-  --text-muted: #6B7280;
+  --text-secondary: #A1A8B8;
+  --text-muted: #6E7687;
 
+  /* Colori funzionali per area */
   --color-recovery: #2DD4BF;
   --color-recovery-soft: rgba(45, 212, 191, 0.16);
   --color-strain: #FB923C;
@@ -87,12 +60,13 @@
   --color-sleep: #818CF8;
   --color-sleep-soft: rgba(129, 140, 248, 0.16);
 
+  /* Tre toni di indaco per l'ipnogramma + grigio per la veglia */
   --hypno-awake: #71717A;
   --hypno-rem: #A5B4FC;
   --hypno-light: #818CF8;
   --hypno-deep: #4F46E5;
 
-  --band-fill: rgba(156, 163, 175, 0.16);
+  --band-fill: rgba(161, 168, 184, 0.15);
   --grid-line: rgba(255, 255, 255, 0.07);
 }
 
@@ -123,7 +97,9 @@ a {
   padding: var(--space-6) var(--space-4) var(--space-12);
 }
 
-/* Navigazione minimale e selettore di data */
+/* ==========================================================================
+   HEADER, NAVIGAZIONE E MINI-CALENDARIO POPOVER
+   ========================================================================== */
 .top-header {
   display: flex;
   flex-direction: column;
@@ -151,7 +127,8 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1);
-  background: var(--bg-subtle);
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
   padding: var(--space-1);
   border-radius: var(--radius-pill);
 }
@@ -171,9 +148,9 @@ a {
 }
 
 .nav-link.active {
-  background: var(--bg-card);
+  background: var(--bg-elevated);
   color: var(--text-primary);
-  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border-card);
 }
 
 .header-controls {
@@ -183,16 +160,156 @@ a {
   flex-wrap: wrap;
 }
 
+.date-selector-wrap {
+  position: relative;
+}
+
 .date-selector {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
   background: var(--bg-card);
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
-  padding: var(--space-1) var(--space-3);
+  padding: 3px var(--space-2);
   font-size: var(--text-sm);
-  box-shadow: var(--shadow-card);
+}
+
+.calendar-trigger-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 120ms ease;
+}
+
+.calendar-trigger-btn:hover {
+  background: var(--bg-subtle);
+}
+
+/* Popover del piccolo calendario */
+.calendar-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 304px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
+  padding: var(--space-4);
+  z-index: 850;
+  display: none;
+}
+
+.calendar-popover.open {
+  display: block;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.calendar-month-title {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: var(--space-2);
+}
+
+.calendar-days-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.cal-day-cell {
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.cal-day-empty {
+  pointer-events: none;
+}
+
+.cal-day-disabled {
+  color: rgba(110, 118, 135, 0.32);
+  cursor: not-allowed;
+}
+
+.cal-day-avail {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  border-color: rgba(45, 212, 191, 0.25);
+  cursor: pointer;
+  transition: background 120ms ease, transform 100ms ease;
+}
+
+.cal-day-avail:hover {
+  background: var(--bg-elevated);
+  border-color: var(--color-recovery);
+  transform: scale(1.05);
+}
+
+.cal-day-active {
+  background: var(--color-recovery) !important;
+  color: #091316 !important;
+  font-weight: 800;
+  border-color: var(--color-recovery);
+}
+
+.calendar-footer {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-card);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.calendar-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cal-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.cal-dot-avail {
+  background: var(--color-recovery);
 }
 
 .btn-icon,
@@ -221,12 +338,14 @@ a {
 .btn-icon:hover,
 .btn-pill:hover,
 .btn-pill.active {
-  background: var(--bg-subtle);
+  background: var(--bg-elevated);
   color: var(--text-primary);
-  border-color: var(--text-muted);
+  border-color: var(--border-strong);
 }
 
-/* Griglia a 12 colonne desktop, 1 colonna su telefono */
+/* ==========================================================================
+   GRIGLIA E SCHEDE (RETTANGOLI)
+   ========================================================================== */
 .grid-12 {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -236,12 +355,14 @@ a {
 
 .col-12 { grid-column: span 12; }
 .col-8  { grid-column: span 8; }
+.col-7  { grid-column: span 7; }
 .col-6  { grid-column: span 6; }
+.col-5  { grid-column: span 5; }
 .col-4  { grid-column: span 4; }
 .col-3  { grid-column: span 3; }
 
 @media (max-width: 960px) {
-  .col-8, .col-6, .col-4, .col-3 {
+  .col-8, .col-7, .col-6, .col-5, .col-4, .col-3 {
     grid-column: span 6;
   }
 }
@@ -250,17 +371,15 @@ a {
   .grid-12 {
     grid-template-columns: 1fr;
   }
-  .col-12, .col-8, .col-6, .col-4, .col-3 {
+  .col-12, .col-8, .col-7, .col-6, .col-5, .col-4, .col-3 {
     grid-column: span 1;
   }
 }
 
-/* Schede arrotondate (22px) */
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border-card);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
   padding: var(--space-5);
   display: flex;
   flex-direction: column;
@@ -273,23 +392,23 @@ a {
   width: 100%;
   font-family: inherit;
   color: inherit;
-  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
 }
 
 .card-interactive:hover,
 .card-interactive:focus-visible {
-  border-color: var(--text-muted);
-  transform: translateY(-1px);
+  border-color: var(--border-strong);
+  background: #191D28;
+  transform: translateY(-2px);
   outline: none;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-2);
-  margin-bottom: var(--space-3);
-  flex-wrap: wrap;
+  margin-bottom: var(--space-2);
 }
 
 .card-label {
@@ -330,6 +449,8 @@ a {
 /* Variazione rispetto alla baseline: SEMPRE in scala di grigi con freccia ▲▼• */
 .baseline-delta {
   margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
   font-size: var(--text-xs);
   color: var(--text-secondary);
   display: flex;
@@ -341,8 +462,8 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   flex-shrink: 0;
   border-radius: var(--radius-pill);
   background: var(--bg-subtle);
@@ -424,13 +545,14 @@ a {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  font-size: var(--text-xs);
+  font-size: 11px;
   font-weight: 600;
-  padding: var(--space-1) var(--space-3);
+  padding: 3px 10px;
   border-radius: var(--radius-pill);
   background: var(--bg-subtle);
   color: var(--text-secondary);
-  border: 1px solid transparent;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
 }
 
 button.quality-pill {
@@ -438,11 +560,10 @@ button.quality-pill {
 }
 
 button.quality-pill:hover {
-  border-color: var(--text-muted);
+  border-color: var(--border-strong);
   color: var(--text-primary);
 }
 
-/* Stati vuoti, calibrazione, scheletri ed errori */
 .state-box {
   padding: var(--space-4);
   border-radius: var(--radius-sm);
@@ -458,7 +579,6 @@ button.quality-pill:hover {
   margin-bottom: var(--space-2);
 }
 
-/* Grafici Plotly */
 .chart-box {
   width: 100%;
   min-height: 250px;
@@ -469,11 +589,29 @@ button.quality-pill:hover {
   min-height: 320px;
 }
 
-/* Pannello di dettaglio a scomparsa (3 strati: Numero -> Scomposizione -> Come si calcola) */
+/* Mini-barra orizzontale delle 5 zone FC nella tabella attività */
+.mini-zone-stack {
+  display: flex;
+  width: 100%;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--bg-subtle);
+}
+
+.mini-zone-stack span {
+  display: block;
+  height: 100%;
+}
+
+/* ==========================================================================
+   PANNELLO DI DETTAGLIO A SCOMPARSA (LAYOUT CHIARO E DISTRIBUITO IN GRIGLIE)
+   ========================================================================== */
 .drawer-backdrop {
   position: fixed;
   inset: 0;
   background: var(--bg-overlay);
+  backdrop-filter: blur(3px);
   display: none;
   z-index: 900;
 }
@@ -486,10 +624,10 @@ button.quality-pill:hover {
   position: fixed;
   top: 0;
   right: 0;
-  width: min(520px, 100vw);
+  width: min(580px, 100vw);
   height: 100vh;
   background: var(--bg-card);
-  border-left: 1px solid var(--border-card);
+  border-left: 1px solid var(--border-strong);
   padding: var(--space-6);
   overflow-y: auto;
   z-index: 950;
@@ -510,15 +648,142 @@ button.quality-pill:hover {
     bottom: 0;
     left: 0;
     width: 100vw;
-    height: 88vh;
+    height: 90vh;
     border-left: none;
-    border-top: 1px solid var(--border-card);
+    border-top: 1px solid var(--border-strong);
     border-radius: var(--radius-card) var(--radius-card) 0 0;
     transform: translateY(102%);
   }
   .drawer-panel.open {
     transform: translateY(0);
   }
+}
+
+.drawer-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-card);
+}
+
+.drawer-main-title {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-top: 2px;
+}
+
+.drawer-hero-card {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.drawer-status-badge {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-card);
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+}
+
+/* Griglia a 2 colonne per i KPI nel drawer */
+.drawer-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+@media (max-width: 480px) {
+  .drawer-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.drawer-kpi-box {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.drawer-kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.drawer-kpi-val {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Box delle 5 Zone FC nel drawer */
+.drawer-zones-box {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.drawer-zone-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.drawer-zone-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+/* Lista componenti strutturata in schede */
+.drawer-comp-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.drawer-comp-card {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+}
+
+.drawer-params-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.drawer-param-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: var(--text-xs);
 }
 
 .how-it-works-box {
@@ -546,6 +811,7 @@ button.quality-pill:hover {
   margin-top: var(--space-3);
   padding: var(--space-4);
   background: var(--bg-subtle);
+  border: 1px solid var(--border-card);
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   color: var(--text-secondary);
@@ -563,10 +829,10 @@ button.quality-pill:hover {
   flex-direction: column;
   gap: var(--space-3);
   font-family: var(--font-math);
-  font-size: 1.02rem;
+  font-size: 1.04rem;
   padding: var(--space-4);
   margin: var(--space-2) 0;
-  background: var(--bg-card);
+  background: var(--bg-page);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-card);
   color: var(--text-primary);
@@ -575,7 +841,7 @@ button.quality-pill:hover {
 
 .math-eq-line {
   display: block;
-  line-height: 2.0;
+  line-height: 2.05;
   padding: 2px 0;
 }
 
@@ -584,19 +850,19 @@ button.quality-pill:hover {
   flex-direction: column;
   align-items: center;
   vertical-align: middle;
-  margin: 0 4px;
+  margin: 0 5px;
   font-size: 0.94em;
 }
 
 .math-num {
   border-bottom: 1.5px solid var(--text-primary);
-  padding: 0 5px 2px;
+  padding: 0 6px 2px;
   text-align: center;
   line-height: 1.25;
 }
 
 .math-den {
-  padding: 2px 5px 0;
+  padding: 2px 6px 0;
   text-align: center;
   line-height: 1.25;
 }
@@ -612,7 +878,7 @@ button.quality-pill:hover {
   flex-direction: column;
   align-items: center;
   vertical-align: middle;
-  margin: 0 3px;
+  margin: 0 4px;
   line-height: 1.05;
 }
 
@@ -636,16 +902,16 @@ button.quality-pill:hover {
 /* Barra di progresso per i sotto-punteggi nel drawer e nella completezza */
 .subscore-bar-track {
   width: 100%;
-  height: 6px;
-  background: var(--bg-subtle);
+  height: 7px;
+  background: var(--bg-page);
   border-radius: var(--radius-pill);
   overflow: hidden;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .subscore-bar-fill {
   height: 100%;
-  background: var(--text-secondary);
+  background: var(--color-recovery);
   border-radius: var(--radius-pill);
 }
 
@@ -662,7 +928,7 @@ button.quality-pill:hover {
 .select-clean {
   background: var(--bg-card);
   color: var(--text-primary);
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
   font-family: var(--font-sans);

@@ -95,23 +95,24 @@
   </article>
 </section>
 
-<!-- Elenco attività con analisi HRR, Deriva, TRIMP ed Efficienza -->
-<h2 class="section-title">Elenco Attività Registrate (clicca una riga per aprire formule e qualità)</h2>
+<!-- Elenco attività con analisi completa -->
+<h2 class="section-title">Elenco Attività Registrate (clicca una riga per aprire tutti i parametri e le 5 Zone FC)</h2>
 <section class="card">
   {% if activities %}
   <div class="table-wrap">
     <table class="table-clean">
       <thead>
         <tr>
-          <th>Data</th>
-          <th>Attività</th>
-          <th>Tipo</th>
+          <th>Data e Ora</th>
+          <th>Attività &amp; Disciplina</th>
           <th>Durata</th>
           <th>Distanza</th>
-          <th>FC (med / max)</th>
+          <th>Passo / Dettaglio</th>
+          <th>FC (Med / Max)</th>
+          <th>Calorie &amp; BB</th>
+          <th>Training Effect</th>
+          <th>Zone FC (Z1–Z5)</th>
           <th>TRIMP</th>
-          <th>HRR (60s / 120s)</th>
-          <th>Deriva FC</th>
           <th>Efficienza</th>
         </tr>
       </thead>
@@ -119,37 +120,58 @@
         {% for act in activities %}
         <tr
           style="cursor: pointer;"
-          data-detail-json="{{ {'title': (act.name or act.type) ~ ' (' ~ act.day ~ ')', 'display_value': act.trimp.value if act.trimp.calculable else '—', 'unit': 'TRIMP', 'subtitle': 'HRR, Deriva Cardiaca, TRIMP ed Efficienza', 'assumptions': (act.hrr.assumptions + act.drift.assumptions + act.trimp.assumptions), 'how_it_works': act.drift.how_it_works} | tojson | forceescape }}"
+          data-detail-json="{{ act.detail_payload | tojson | forceescape }}"
         >
-          <td>{{ act.day }}</td>
-          <td><strong>{{ act.name or "—" }}</strong></td>
-          <td>{{ act.type }}</td>
-          <td>{% if act.duration_s is not none %}{{ (act.duration_s / 60)|round|int }} min{% else %}dato assente{% endif %}</td>
-          <td>{% if act.distance_m and act.distance_m > 0 %}{{ (act.distance_m / 1000)|round(2) }} km{% else %}—{% endif %}</td>
           <td>
-            {% if act.hr_avg is not none %}{{ act.hr_avg|int }} / {{ act.hr_max|int if act.hr_max else "—" }} bpm{% else %}dato assente{% endif %}
+            <strong>{{ act.day }}</strong>
+            {% if act.start_hhmm %}<div style="font-size: 11px; color: var(--text-muted);">ore {{ act.start_hhmm }}</div>{% endif %}
+          </td>
+          <td>
+            <strong>{{ act.name or act.type_badge }}</strong>
+            <div style="font-size: 11px; color: var(--text-secondary);">{{ act.type_badge }}</div>
+          </td>
+          <td><strong>{{ act.duration_fmt }}</strong></td>
+          <td>{% if act.distance_m and act.distance_m > 0 %}{{ (act.distance_m / 1000)|round(2) }} km{% else %}—{% endif %}</td>
+          <td><span style="font-size: var(--text-xs); color: var(--text-primary);">{{ act.pace_or_detail }}</span></td>
+          <td>
+            {% if act.hr_avg is not none %}
+              <strong>{{ act.hr_avg|int }}</strong> <span style="color: var(--text-muted);">/ {{ act.hr_max|int if act.hr_max else "—" }} bpm</span>
+            {% else %}
+              dato assente
+            {% endif %}
+          </td>
+          <td>
+            {% if act.calories_kcal %}<strong>{{ act.calories_kcal }} kcal</strong>{% else %}—{% endif %}
+            {% if act.bb_diff is not none %}
+              <div style="font-size: 11px; color: var(--text-muted);">BB {{ act.bb_diff }} pt</div>
+            {% endif %}
+          </td>
+          <td>
+            {% if act.ae_te is not none %}
+              <span class="quality-pill">AE {{ act.ae_te }}{% if act.ane_te is not none %} · AnE {{ act.ane_te }}{% endif %}</span>
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td style="min-width: 120px;">
+            {% if act.has_zones %}
+              <div class="mini-zone-stack" title="Distribuzione Z1..Z5">
+                {% for zb in act.zones_bars if zb.pct > 0 %}
+                  <span style="width: {{ zb.pct }}%; background: {{ zb.color }};" title="{{ zb.name }}: {{ zb.min }} min ({{ zb.pct }}%)"></span>
+                {% endfor %}
+              </div>
+              <div style="font-size: 10px; color: var(--text-muted); margin-top: 3px;">
+                Z2: {{ act.zones_bars[1].min }}m · Z3: {{ act.zones_bars[2].min }}m · Z4+: {{ (act.zones_bars[3].min + act.zones_bars[4].min)|round(1) }}m
+              </div>
+            {% else %}
+              <span style="color: var(--text-muted); font-size: var(--text-xs);">—</span>
+            {% endif %}
           </td>
           <td>
             {% if act.trimp and act.trimp.calculable %}
-              <strong>{{ act.trimp.value }}</strong>
+              <strong style="color: var(--color-strain);">{{ act.trimp.value }}</strong>
             {% else %}
-              <span class="quality-pill">non calcolabile</span>
-            {% endif %}
-          </td>
-          <td>
-            {% if act.hrr and act.hrr.calculable %}
-              <strong>-{{ act.hrr.value.hrr_60_bpm }}</strong>
-              {% if act.hrr.value.hrr_120_bpm is not none %}/ -{{ act.hrr.value.hrr_120_bpm }}{% endif %} bpm
-            {% else %}
-              <span class="quality-pill" title="{{ act.hrr.reason if act.hrr else '' }}">non calcolabile</span>
-            {% endif %}
-          </td>
-          <td>
-            {% if act.drift and act.drift.calculable %}
-              <strong>{{ act.drift.value.hr_drift_pct }}%</strong>
-              <span style="font-size: var(--text-xs); color: var(--text-secondary);"> (Pa:Hr {{ act.drift.value.aerobic_decoupling_pct }}%)</span>
-            {% else %}
-              <span class="quality-pill" title="{{ act.drift.reason if act.drift else '' }}">non calcolabile</span>
+              <span class="quality-pill">n/d</span>
             {% endif %}
           </td>
           <td>

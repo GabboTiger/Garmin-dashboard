@@ -55,21 +55,220 @@ def _resolve_day_navigation(
     return latest, target_day, prev_day, next_day
 
 
+ACTIVITY_TYPE_LABELS: dict[str, str] = {
+    "running": "🏃 Corsa",
+    "tennis_v2": "🎾 Tennis",
+    "tennis": "🎾 Tennis",
+    "strength_training": "🏋️ Pesi / Forza",
+    "cycling": "🚴 Ciclismo",
+    "swimming": "🏊 Nuoto",
+    "walking": "🚶 Camminata",
+    "hiking": "🥾 Escursionismo",
+}
+
+
+def _format_pace_mmss(sec_per_km: float) -> str:
+    tot_s = int(round(sec_per_km))
+    return f"{tot_s // 60}:{tot_s % 60:02d} /km"
+
+
+def _format_duration_hm(duration_s: float | None) -> str:
+    if duration_s is None or duration_s <= 0:
+        return "dato assente"
+    mins = int(round(float(duration_s) / 60.0))
+    if mins >= 60:
+        return f"{mins // 60}h {mins % 60:02d}m"
+    return f"{mins} min"
+
+
 def _enrich_activities_with_analysis(
     conn: Any,
     activities: list[dict[str, Any]],
     rhr_by_day: dict[str, float | None],
     limit: int = 20,
 ) -> list[dict[str, Any]]:
+    # Carica la mappa dei payload grezzi `activities_range` se presente per estrarre calorie, TE, serie/rip, potenza, ecc.
+    raw_acts_list = db.get_raw_by_endpoint(conn, "activities_range")
+    raw_by_id: dict[int, dict[str, Any]] = {}
+    if isinstance(raw_acts_list, list):
+        for ra in raw_acts_list:
+            if isinstance(ra, dict) and ra.get("activityId") is not None:
+                try:
+                    raw_by_id[int(ra["activityId"])] = ra
+                except (ValueError, TypeError):
+                    pass
+
     enriched: list[dict[str, Any]] = []
     for act in reversed(activities[-limit:]):
         act_item = dict(act)
         act_id = act.get("activity_id")
+        raw_act = raw_by_id.get(int(act_id)) if act_id is not None else None
+        if raw_act is None:
+            raw_act = {}
+
         details_raw = db.get_raw_by_endpoint(conn, f"activity_details:{act_id}") if act_id else None
-        act_item["hrr"] = analysis.compute_heart_rate_recovery(details_raw)
-        act_item["drift"] = analysis.compute_cardiac_drift(details_raw)
-        act_item["trimp"] = analysis.compute_trimp(act, details_raw, hr_rest=rhr_by_day.get(str(act.get("day"))))
-        act_item["efficiency"] = analysis.compute_speed_hr_efficiency(act)
+        hrr = analysis.compute_heart_rate_recovery(details_raw)
+        drift = analysis.compute_cardiac_drift(details_raw)
+        trimp = analysis.compute_trimp(act, details_raw, hr_rest=rhr_by_day.get(str(act.get("day"))))
+        efficiency = analysis.compute_speed_hr_efficiency(act)
+
+        act_item["hrr"] = hrr
+        act_item["drift"] = drift
+        act_item["trimp"] = trimp
+        act_item["efficiency"] = efficiency
+
+        # Orario di inizio HH:MM
+        start_local = str(act.get("start_local") or "")
+        start_hhmm = start_local[11:16] if len(start_local) >= 16 else ""
+        act_item["start_hhmm"] = start_hhmm
+
+        act_type = str(act.get("type") or "other")
+        type_badge = ACTIVITY_TYPE_LABELS.get(act_type, f"⚡ {act_type.replace('_', ' ').title()}")
+        act_item["type_badge"] = type_badge
+
+        dur_s = float(act["duration_s"]) if act.get("duration_s") is not None else None
+        dist_m = float(act["distance_m"]) if act.get("distance_m") is not None else None
+        act_item["duration_fmt"] = _format_duration_hm(dur_s)
+
+        moving_s = raw_act.get("movingDuration")
+        moving_fmt = _format_duration_hm(float(moving_s)) if moving_s else None
+
+        # Passo / Velocità / Serie & Ripetizioni
+        pace_or_detail = "—"
+        speed_kmh: float | None = None
+        if dist_m and dist_m > 50 and dur_s and dur_s > 0:
+            speed_kmh = round((dist_m / 1000.0) / (dur_s / 3600.0), 1)
+            if act_type == "running":
+                sec_per_km = dur_s / (dist_m / 1000.0)
+                pace_or_detail = f"{_format_pace_mmss(sec_per_km)} ({speed_kmh} km/h)"
+            elif act_type in ("tennis_v2", "tennis") and raw_act.get("steps"):
+                pace_or_detail = f"{int(raw_act['steps'])} passi · max {round(float(raw_act.get('maxSpeed') or 0) * 3.6, 1)} km/h"
+            else:
+                pace_or_detail = f"{speed_kmh} km/h"
+        elif act_type == "strength_training":
+            sets = raw_act.get("activeSets") or raw_act.get("totalSets")
+            reps = raw_act.get("totalReps")
+            if sets and reps:
+                pace_or_detail = f"{int(sets)} serie · {int(reps)} rip."
+            elif sets:
+                pace_or_detail = f"{int(sets)} serie"
+            else:
+                pace_or_detail = "Sessione forza"
+        act_item["pace_or_detail"] = pace_or_detail
+
+        # Calorie, Body Battery, Training Effect
+        cal = raw_act.get("calories")
+        if cal is None and dur_s and act.get("hr_avg"):
+            # Stima per dati demo sintetici
+            cal = round((dur_s / 60.0) * max(4.0, (float(act["hr_avg"]) - 65.0) * 0.14), 0)
+        act_item["calories_kcal"] = int(round(float(cal))) if cal is not None else None
+        act_item["bb_diff"] = int(raw_act["differenceBodyBattery"]) if raw_act.get("differenceBodyBattery") is not None else None
+
+        ae_te = round(float(raw_act["aerobicTrainingEffect"]), 1) if raw_act.get("aerobicTrainingEffect") is not None else None
+        ane_te = round(float(raw_act["anaerobicTrainingEffect"]), 1) if raw_act.get("anaerobicTrainingEffect") is not None else None
+        te_label = raw_act.get("trainingEffectLabel")
+        act_item["ae_te"] = ae_te
+        act_item["ane_te"] = ane_te
+        act_item["te_label"] = te_label
+
+        # Scomposizione delle 5 Zone Cardiache (Z1..Z5)
+        zone_colors = ["#71717A", "#2DD4BF", "#818CF8", "#F59E0B", "#FB923C"]
+        zone_names = ["Z1 Recupero", "Z2 Base Aerobica", "Z3 Ritmo / Tempo", "Z4 Soglia Anaerobica", "Z5 VO2max / Massimale"]
+        z_secs = [float(act.get(f"z{k}_s") or 0.0) for k in range(1, 6)]
+        tot_z_s = sum(z_secs)
+        zones_bars: list[dict[str, Any]] = []
+        for idx in range(5):
+            zm = round(z_secs[idx] / 60.0, 1)
+            zpct = round((z_secs[idx] / tot_z_s) * 100.0, 0) if tot_z_s > 0 else 0.0
+            zones_bars.append(
+                {
+                    "zone": f"Z{idx + 1}",
+                    "name": zone_names[idx],
+                    "min": zm,
+                    "pct": int(zpct),
+                    "color": zone_colors[idx],
+                }
+            )
+        act_item["zones_bars"] = zones_bars
+        act_item["has_zones"] = tot_z_s > 0
+
+        # Costruzione KPI ordinati per il pannello laterale (drawer)
+        kpis: list[dict[str, str]] = [
+            {"label": "Data e Ora", "value": f"{act.get('day')} {('ore ' + start_hhmm) if start_hhmm else ''}"},
+            {"label": "Disciplina", "value": type_badge},
+            {"label": "Durata Totale", "value": act_item["duration_fmt"]},
+        ]
+        if moving_fmt:
+            kpis.append({"label": "Tempo in Movimento", "value": moving_fmt})
+        if dist_m and dist_m > 0:
+            kpis.append({"label": "Distanza Percorsa", "value": f"{dist_m / 1000.0:.2f} km"})
+        if pace_or_detail != "—":
+            kpis.append({"label": "Passo / Dettaglio Lavoro", "value": pace_or_detail})
+        if act.get("hr_avg") is not None:
+            kpis.append(
+                {
+                    "label": "Frequenza Cardiaca (Media / Max)",
+                    "value": f"{int(act['hr_avg'])} bpm / {int(act['hr_max']) if act.get('hr_max') else '—'} bpm",
+                }
+            )
+        if act_item["calories_kcal"] is not None:
+            kpis.append({"label": "Calorie Bruciate", "value": f"{act_item['calories_kcal']} kcal"})
+        if act_item["bb_diff"] is not None:
+            kpis.append({"label": "Impatto Body Battery", "value": f"{act_item['bb_diff']} pt"})
+        if ae_te is not None:
+            te_txt = f"Aerobico {ae_te} / 5.0" + (f" · Anaerobico {ane_te} / 5.0" if ane_te is not None else "")
+            if te_label:
+                te_txt += f" ({te_label})"
+            kpis.append({"label": "Training Effect Garmin", "value": te_txt})
+        if raw_act.get("avgPower"):
+            p_txt = f"{int(raw_act['avgPower'])} W"
+            if raw_act.get("normPower"):
+                p_txt += f" (NP {int(raw_act['normPower'])} W / Max {int(raw_act.get('maxPower') or 0)} W)"
+            kpis.append({"label": "Potenza di Corsa", "value": p_txt})
+        if raw_act.get("averageRunningCadenceInStepsPerMinute") and act_type == "running":
+            kpis.append(
+                {
+                    "label": "Cadenza e Falcata",
+                    "value": f"{int(round(float(raw_act['averageRunningCadenceInStepsPerMinute'])))} spm · {round(float(raw_act.get('avgStrideLength') or 0) / 100.0, 2)} m",
+                }
+            )
+        if raw_act.get("elevationGain"):
+            kpis.append({"label": "Dislivello Positivo", "value": f"+{int(round(float(raw_act['elevationGain'])))} m"})
+        if raw_act.get("vO2MaxValue"):
+            kpis.append({"label": "VO2max Stimato", "value": f"{raw_act['vO2MaxValue']} ml/kg/min"})
+        if raw_act.get("fastestSplit_1000"):
+            kpis.append({"label": "Miglior 1 km (Split)", "value": _format_pace_mmss(float(raw_act["fastestSplit_1000"]))})
+        if raw_act.get("waterEstimated"):
+            kpis.append({"label": "Sudorazione Stimata", "value": f"{int(round(float(raw_act['waterEstimated'])))} ml"})
+        if trimp["calculable"]:
+            kpis.append({"label": "Carico TRIMP Calcolato", "value": f"{trimp['value']} TRIMP ({trimp['method']})"})
+        if efficiency["calculable"]:
+            kpis.append({"label": "Efficienza Velocità/FC", "value": f"{efficiency['value']} m/battito"})
+        if hrr["calculable"]:
+            hrr_txt = f"-{hrr['value']['hrr_60_bpm']} bpm a 60s"
+            if hrr["value"].get("hrr_120_bpm") is not None:
+                hrr_txt += f" / -{hrr['value']['hrr_120_bpm']} bpm a 120s"
+            kpis.append({"label": "Recupero FC Post-Esercizio (HRR)", "value": hrr_txt})
+        else:
+            kpis.append({"label": "Recupero FC (HRR)", "value": f"Non calcolabile ({hrr.get('reason', '')})"})
+        if drift["calculable"]:
+            kpis.append(
+                {
+                    "label": "Deriva Cardiaca (1ª vs 2ª metà)",
+                    "value": f"{drift['value']['hr_drift_pct']}% (Pa:Hr {drift['value']['aerobic_decoupling_pct']}%)",
+                }
+            )
+
+        act_item["detail_payload"] = {
+            "title": f"{act.get('name') or type_badge} ({act.get('day')})",
+            "display_value": trimp["value"] if trimp["calculable"] else act_item["duration_fmt"],
+            "unit": "TRIMP" if trimp["calculable"] else "",
+            "subtitle": f"{type_badge} · {act_item['duration_fmt']}" + (f" · {act_item['calories_kcal']} kcal" if act_item["calories_kcal"] else ""),
+            "kpis": kpis,
+            "zones_bars": zones_bars if tot_z_s > 0 else [],
+            "assumptions": trimp["assumptions"] + hrr["assumptions"] + drift["assumptions"],
+            "how_it_works": trimp["how_it_works"],
+        }
         enriched.append(act_item)
     return enriched
 
@@ -206,6 +405,13 @@ def create_app(db_path: Path | str | None = None, demo_mode: bool | None = None)
         if cnt_daily == 0 or cnt_raw == 0:
             synthetic.seed_synthetic_db(conn, days=90, seed=42)
     conn.close()
+
+    @app.context_processor
+    def inject_available_days() -> dict[str, Any]:
+        c = db.connect(app.config["DB_PATH"])
+        rows = c.execute("SELECT day FROM daily ORDER BY day ASC").fetchall()
+        c.close()
+        return {"available_days": [str(r["day"]) for r in rows]}
 
     @app.get("/")
     def index() -> str:

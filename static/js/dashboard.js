@@ -1,6 +1,6 @@
 /* ==========================================================================
-   dashboard.js — Componenti interattivi, Motore Matematico LaTeX->HTML offline
-   e Grafici Plotly della Garmin Personal Dashboard
+   dashboard.js — Componenti interattivi, Mini-Calendario, Motore Matematico
+   LaTeX->HTML offline e Grafici Plotly della Garmin Personal Dashboard
    ========================================================================== */
 
 (function () {
@@ -14,9 +14,6 @@
 
   /* ========================================================================
      1. MOTORE DI RENDERING MATEMATICO OFFLINE (LaTeX -> HTML tipografico)
-     Converte espressioni LaTeX (\frac{a}{b}, \sum_{i}^{n}, \overline{x}, _{sub},
-     ^{sup}, \text{...}, lettere greche e operatori) in HTML semantico con
-     frazioni verticali impilate, sommatorie e pedici/apici.
      ======================================================================== */
 
   function extractBracedGroup(str, startIdx) {
@@ -95,7 +92,6 @@
     while (i < n) {
       const ch = expr[i];
 
-      // Comandi con argomento tra graffe: \frac{a}{b}, \text{...}, \overline{...}, \bar{...}, \mathbb{...}
       if (expr.startsWith("\\frac", i)) {
         i += 5;
         while (i < n && expr[i] === " ") i++;
@@ -170,7 +166,6 @@
         continue;
       }
 
-      // Pedici e apici: _{...} oppure _x, ^{...} oppure ^x
       if (ch === "_" || ch === "^") {
         const tag = ch === "_" ? "sub" : "sup";
         i++;
@@ -185,7 +180,6 @@
         continue;
       }
 
-      // Simboli LaTeX noti
       if (ch === "\\") {
         let matched = false;
         const symKeys = Object.keys(LATEX_SYMBOLS).sort(function (a, b) {
@@ -201,7 +195,6 @@
           }
         }
         if (matched) continue;
-        // Comando generico non mappato: rimuove la backslash
         i++;
         continue;
       }
@@ -219,7 +212,6 @@
 
   function renderLatexToHtml(latexStr) {
     if (!latexStr) return "";
-    // Separa equazioni multiple divise da ", \quad" o "\quad" su righe distinte
     const parts = String(latexStr)
       .split(/,\s*\\quad|\\quad/g)
       .map(function (s) { return s.trim(); })
@@ -233,8 +225,53 @@
   }
 
   /* ========================================================================
-     2. PANNELLO DI DETTAGLIO A SCOMPARSA (3 STRATI + FORMULE SEMPRE VISIBILI)
+     2. PANNELLO DI DETTAGLIO STRUTTURATO E DISTRIBUITO IN GRIGLIE
      ======================================================================== */
+
+  const KPI_FIELD_LABELS = {
+    efficiency_pct: { label: "Efficienza del Sonno", unit: "%" },
+    deep_pct: { label: "Quota Sonno Profondo", unit: "%" },
+    light_pct: { label: "Quota Sonno Leggero", unit: "%" },
+    rem_pct: { label: "Quota Sonno REM", unit: "%" },
+    sleep_onset_latency_min: { label: "Latenza Inizio Sonno", unit: "min" },
+    awakenings_count: { label: "Risvegli (≥ 2 min)", unit: "eventi" },
+    latency_to_deep_min: { label: "Latenza 1° Profondo", unit: "min" },
+    latency_to_rem_min: { label: "Latenza 1° REM", unit: "min" },
+    estimated_cycles: { label: "Cicli NREM→REM Stimati", unit: "cicli" },
+    bedtime_sd_min: { label: "Variabilità Addormentamento", unit: "min SD" },
+    waketime_sd_min: { label: "Variabilità Risveglio", unit: "min SD" },
+    midsleep_sd_min: { label: "Variabilità Metà Sonno", unit: "min SD" },
+    midsleep_mean_hhmm: { label: "Orario Medio Metà Sonno", unit: "" },
+    social_jetlag_min: { label: "Social Jetlag (WE vs Feriali)", unit: "min" },
+    sri_score: { label: "Indice Regolarità (SRI)", unit: "/ 100" },
+    min_hr_bpm: { label: "FC Minima Notturna", unit: "bpm" },
+    min_hr_time_hhmm: { label: "Orario Nadir Cardiaco", unit: "" },
+    hrv_night_ms: { label: "HRV Media Notturna", unit: "ms" },
+    hrv_night_sd_ms: { label: "SD Intra-Notte HRV", unit: "ms" },
+    respiration_sleep_brpm: { label: "Respirazione Notturna", unit: "atti/m" },
+    spo2_sleep_avg_pct: { label: "SpO2 Media Notturna", unit: "%" },
+    spo2_sleep_min_pct: { label: "SpO2 Minima Notturna", unit: "%" },
+    spo2_below_threshold_min: { label: "Tempo SpO2 sotto soglia", unit: "min" },
+    sleep_debt_7d_hours: { label: "Debito di Sonno (7g)", unit: "h" },
+    sleep_debt_14d_hours: { label: "Debito di Sonno (14g)", unit: "h" },
+    bb_charged: { label: "Body Battery Caricata (+)", unit: "pt" },
+    bb_drained: { label: "Body Battery Scaricata (-)", unit: "pt" },
+    bb_max: { label: "Body Battery Massima", unit: "pt" },
+    bb_min: { label: "Body Battery Minima", unit: "pt" },
+    recharge_rate_pt_per_hour: { label: "Velocità Ricarica Notturna", unit: "pt/h" },
+    atl_7d: { label: "Carico Acuto (ATL 7g)", unit: "TRIMP/g" },
+    ctl_28d: { label: "Carico Cronico (CTL 28g)", unit: "TRIMP/g" },
+    tsb_form: { label: "Bilancio Fitness-Fatica (TSB)", unit: "pt" },
+    acwr: { label: "Rapporto Acuto/Cronico (ACWR)", unit: "ratio" },
+    total_zone_minutes: { label: "Tempo Totale in Zona (7g)", unit: "min" },
+    low_intensity_z1_z2_pct: { label: "Quota Bassa Intensità (Z1+Z2)", unit: "%" },
+    moderate_z3_pct: { label: "Quota Intensità Media (Z3)", unit: "%" },
+    high_intensity_z4_z5_pct: { label: "Quota Alta Intensità (Z4+Z5)", unit: "%" },
+    ln_rmssd: { label: "ln(rMSSD) Notte", unit: "ln(ms)" },
+    ln_rmssd_7d: { label: "Media 7g ln(rMSSD)", unit: "ln(ms)" },
+    cv_7d_pct: { label: "Coefficiente Variazione (CV 7g)", unit: "%" },
+    band_status: { label: "Stato rispetto alla Banda 60g", unit: "" }
+  };
 
   function openDetailDrawer(payload, triggerEl) {
     const backdrop = document.getElementById("detail-backdrop");
@@ -243,9 +280,26 @@
 
     lastFocusedTrigger = triggerEl || document.activeElement;
 
+    const cardLabel = triggerEl ? triggerEl.getAttribute("data-card-label") : null;
+    const cardValue = triggerEl ? triggerEl.getAttribute("data-card-value") : null;
+    const cardUnit = triggerEl ? triggerEl.getAttribute("data-card-unit") : null;
+    let baselineObj = null;
+    if (triggerEl && triggerEl.getAttribute("data-baseline-json")) {
+      try {
+        baselineObj = JSON.parse(triggerEl.getAttribute("data-baseline-json"));
+      } catch (e) {
+        baselineObj = null;
+      }
+    }
+
     const titleEl = document.getElementById("drawer-title");
     const valueEl = document.getElementById("drawer-value");
     const statusEl = document.getElementById("drawer-status");
+    const kpiSecEl = document.getElementById("drawer-kpi-section");
+    const kpiGridEl = document.getElementById("drawer-kpi-grid");
+    const zonesSecEl = document.getElementById("drawer-zones-section");
+    const zonesBarsEl = document.getElementById("drawer-zones-bars");
+    const compSecEl = document.getElementById("drawer-comp-section");
     const compListEl = document.getElementById("drawer-components");
     const howTitleEl = document.getElementById("drawer-how-title");
     const howFormulaEl = document.getElementById("drawer-how-formula");
@@ -254,84 +308,240 @@
     const howContentEl = document.getElementById("drawer-how-content");
     const howToggleBtn = document.getElementById("drawer-how-toggle");
 
-    if (titleEl) titleEl.textContent = payload.title || payload.name || "Dettaglio metrica";
-    if (valueEl) {
-      let v = payload.score !== undefined && payload.score !== null ? payload.score : payload.display_value;
-      if (v === undefined && payload.value !== undefined && typeof payload.value !== "object") {
-        v = payload.value;
-      }
-      const u = payload.unit && typeof v !== "object" ? " " + payload.unit : "";
-      valueEl.textContent = v !== undefined && v !== null ? String(v) + u : "Dettaglio analisi";
+    // 1. Titolo e Valore protagonista
+    if (titleEl) {
+      titleEl.textContent = cardLabel || payload.title || payload.name || "Dettaglio metrica";
     }
-    if (statusEl) {
-      const qTxt = payload.quality_flag ? "Qualità: " + payload.quality_flag + " (n=" + (payload.n_samples || 0) + ")" : "";
-      statusEl.textContent = payload.subtitle || payload.status_label || qTxt || "";
+    if (valueEl) {
+      if (cardValue !== null && cardValue !== "") {
+        valueEl.textContent = cardValue + (cardUnit ? " " + cardUnit : "");
+      } else {
+        let v = payload.score !== undefined && payload.score !== null ? payload.score : payload.display_value;
+        if (v === undefined && payload.provisional_score !== undefined && payload.provisional_score !== null) {
+          v = payload.provisional_score + "*";
+        }
+        if (v === undefined && payload.value !== undefined && typeof payload.value !== "object") {
+          v = payload.value;
+        }
+        const u = payload.unit && typeof v !== "object" ? " " + payload.unit : (payload.score !== undefined ? " / 100" : "");
+        valueEl.textContent = v !== undefined && v !== null ? String(v) + u : "Dato assente";
+      }
     }
 
-    // Strato 2: Scomposizione (componenti con barra visiva, valori, baseline, pesi o assunzioni)
-    if (compListEl) {
-      compListEl.innerHTML = "";
-      if (Array.isArray(payload.components) && payload.components.length > 0) {
-        payload.components.forEach(function (c) {
+    if (statusEl) {
+      if (baselineObj && baselineObj.status === "ok") {
+        statusEl.textContent = baselineObj.direction_arrow + " " + baselineObj.direction_text;
+      } else if (payload.subtitle || payload.status_label) {
+        statusEl.textContent = payload.subtitle || payload.status_label;
+      } else if (payload.quality_flag) {
+        statusEl.textContent = "Qualità: " + payload.quality_flag + " (n=" + (payload.n_samples || 0) + ")";
+      } else {
+        statusEl.textContent = "Analisi deterministica";
+      }
+    }
+
+    // 2A. Costruzione Griglia KPI a 2 colonne (ben distribuita)
+    const kpiItems = [];
+    if (Array.isArray(payload.kpis) && payload.kpis.length > 0) {
+      payload.kpis.forEach(function (k) {
+        kpiItems.push(k);
+      });
+    } else {
+      if (baselineObj) {
+        const uStr = cardUnit ? " " + cardUnit : "";
+        kpiItems.push({
+          label: "Valore del Giorno",
+          value: baselineObj.value !== null && baselineObj.value !== undefined ? baselineObj.value + uStr : "Dato assente"
+        });
+        kpiItems.push({
+          label: "Norma Personale (Mediana 30g)",
+          value: baselineObj.median !== null && baselineObj.median !== undefined ? baselineObj.median + uStr : "In calibrazione"
+        });
+        kpiItems.push({
+          label: "Dispersione Robusta (1.48·MAD)",
+          value: baselineObj.robust_sd !== null && baselineObj.robust_sd !== undefined ? "±" + baselineObj.robust_sd + uStr : "—"
+        });
+        kpiItems.push({
+          label: "Scostamento Z-Score Robusto",
+          value: baselineObj.z_robust !== null && baselineObj.z_robust !== undefined ? (baselineObj.z_robust > 0 ? "+" : "") + baselineObj.z_robust + " σ" : "—"
+        });
+        kpiItems.push({
+          label: "Stato rispetto alla Baseline",
+          value: (baselineObj.direction_arrow || "") + " " + (baselineObj.direction_text || "—")
+        });
+        kpiItems.push({
+          label: "Copertura Storica (30 giorni)",
+          value: (baselineObj.n_days || 0) + " / 30 giorni validi"
+        });
+      }
+
+      // Se payload.value è un dizionario (es. sleep_arch, sleep_reg, sleep_phys, hrv_band, load_stats), estraiamo i campi scalari
+      const valObj =
+        payload.value && typeof payload.value === "object"
+          ? payload.value.latest && typeof payload.value.latest === "object"
+            ? payload.value.latest
+            : payload.value
+          : null;
+
+      if (valObj) {
+        Object.keys(valObj).forEach(function (k) {
+          const v = valObj[k];
+          if (v === null || v === undefined || typeof v === "object") return;
+          const meta = KPI_FIELD_LABELS[k];
+          if (meta) {
+            kpiItems.push({
+              label: meta.label,
+              value: v + (meta.unit ? " " + meta.unit : "")
+            });
+          }
+        });
+
+        // Se è un oggetto di trend con theil_sen_mann_kendall
+        if (valObj.theil_sen_mann_kendall && typeof valObj.theil_sen_mann_kendall === "object") {
+          const mk = valObj.theil_sen_mann_kendall;
+          kpiItems.push({ label: "Pendenza Theil-Sen (settimanale)", value: (mk.slope_per_week >= 0 ? "+" : "") + mk.slope_per_week });
+          kpiItems.push({ label: "Direzione Trend (Mann-Kendall)", value: mk.direction || "stabile" });
+          kpiItems.push({ label: "p-value Mann-Kendall", value: String(mk.p_value) });
+          kpiItems.push({ label: "Statistica Z Mann-Kendall", value: String(mk.z_stat) });
+        }
+      }
+    }
+
+    if (kpiSecEl && kpiGridEl) {
+      kpiGridEl.innerHTML = "";
+      if (kpiItems.length > 0) {
+        kpiSecEl.style.display = "block";
+        kpiItems.forEach(function (item) {
+          const box = document.createElement("div");
+          box.className = "drawer-kpi-box";
+          box.innerHTML =
+            '<span class="drawer-kpi-label">' + escapeHtml(item.label) + "</span>" +
+            '<span class="drawer-kpi-val">' + escapeHtml(item.value) + "</span>";
+          kpiGridEl.appendChild(box);
+        });
+      } else {
+        kpiSecEl.style.display = "none";
+      }
+    }
+
+    // 2B. Barre delle 5 Zone Cardiache (per le attività o per la distribuzione settimanale)
+    let zonesList = Array.isArray(payload.zones_bars) ? payload.zones_bars : [];
+    if (zonesList.length === 0 && payload.value && Array.isArray(payload.value.zones)) {
+      const zColors = ["#71717A", "#2DD4BF", "#818CF8", "#F59E0B", "#FB923C"];
+      zonesList = payload.value.zones.map(function (z, idx) {
+        return {
+          zone: "Z" + z.zone,
+          name: "Zona " + z.zone,
+          min: z.minutes,
+          pct: Math.round(z.pct),
+          color: zColors[idx] || "#2DD4BF"
+        };
+      });
+    }
+
+    if (zonesSecEl && zonesBarsEl) {
+      zonesBarsEl.innerHTML = "";
+      if (zonesList.length > 0) {
+        zonesSecEl.style.display = "block";
+        zonesList.forEach(function (zb) {
           const row = document.createElement("div");
-          row.style.padding = "10px 0";
-          row.style.borderBottom = "1px solid var(--border-card)";
+          row.className = "drawer-zone-row";
+          row.innerHTML =
+            '<div class="drawer-zone-head">' +
+            "<span>" + escapeHtml(zb.name || zb.zone) + "</span>" +
+            "<span>" + escapeHtml(zb.min) + " min (" + escapeHtml(zb.pct) + "%)</span>" +
+            "</div>" +
+            '<div class="subscore-bar-track" style="margin-top:2px;">' +
+            '<div class="subscore-bar-fill" style="width:' + Math.min(100, Math.max(0, zb.pct)) + "%;background:" + zb.color + ';"></div>' +
+            "</div>";
+          zonesBarsEl.appendChild(row);
+        });
+      } else {
+        zonesSecEl.style.display = "none";
+      }
+    }
+
+    // 2C. Scomposizione Componenti / Assunzioni / Note
+    if (compListEl && compSecEl) {
+      compListEl.innerHTML = "";
+      let hasCompContent = false;
+
+      if (Array.isArray(payload.components) && payload.components.length > 0) {
+        hasCompContent = true;
+        payload.components.forEach(function (c) {
+          const card = document.createElement("div");
+          card.className = "drawer-comp-card";
           const weightPct = c.weight !== undefined ? Math.round(c.weight * 100) + "%" : "";
           const subVal = c.subscore !== undefined ? Math.round(c.subscore) : null;
-          const subTxt = subVal !== null ? " · Punteggio componente: <strong>" + subVal + "/100</strong>" : "";
           const barHtml =
             subVal !== null
               ? '<div class="subscore-bar-track"><div class="subscore-bar-fill" style="width:' +
                 Math.min(100, Math.max(0, subVal)) +
                 '%;"></div></div>'
               : "";
-          row.innerHTML =
-            '<div style="display:flex;justify-content:space-between;font-weight:600;color:var(--text-primary);">' +
-            "<span>" + (c.name || c.key) + (weightPct ? " (peso " + weightPct + ")" : "") + "</span>" +
-            "<span>" + (c.value !== null && c.value !== undefined ? c.value + " " + (c.unit || "") : "dato assente") + "</span>" +
+          card.innerHTML =
+            '<div style="display:flex;justify-content:space-between;align-items:center;font-weight:700;color:var(--text-primary);">' +
+            "<span>" + escapeHtml(c.name || c.key) + "</span>" +
+            '<span class="quality-pill">' +
+            (c.value !== null && c.value !== undefined ? escapeHtml(c.value + " " + (c.unit || "")) : "dato assente") +
+            "</span>" +
             "</div>" +
-            '<div style="font-size:var(--text-xs);color:var(--text-secondary);margin-top:3px;">' +
-            (c.baseline_label || (c.baseline !== null && c.baseline !== undefined ? "Baseline: " + c.baseline : "")) +
-            subTxt +
+            '<div style="display:flex;justify-content:space-between;font-size:var(--text-xs);color:var(--text-secondary);margin-top:6px;">' +
+            "<span>" + escapeHtml(c.baseline_label || (c.baseline !== null && c.baseline !== undefined ? "Riferimento: " + c.baseline : "")) + "</span>" +
+            "<span>" + (weightPct ? "Peso " + weightPct : "") + (subVal !== null ? " · Punteggio: <strong>" + subVal + "/100</strong>" : "") + "</span>" +
             "</div>" +
             barHtml;
-          compListEl.appendChild(row);
+          compListEl.appendChild(card);
         });
-      } else if (Array.isArray(payload.assumptions) && payload.assumptions.length > 0) {
-        payload.assumptions.forEach(function (a) {
-          const p = document.createElement("p");
-          p.style.fontSize = "var(--text-sm)";
-          p.style.color = "var(--text-secondary)";
-          p.style.marginBottom = "6px";
-          p.textContent = "• " + a;
-          compListEl.appendChild(p);
-        });
+      }
+
+      if (Array.isArray(payload.assumptions) && payload.assumptions.length > 0) {
+        hasCompContent = true;
+        const noteCard = document.createElement("div");
+        noteCard.className = "drawer-comp-card";
+        noteCard.innerHTML =
+          '<div class="drawer-kpi-label" style="margin-bottom:6px;">Note di calcolo e qualità del dato</div>' +
+          payload.assumptions
+            .map(function (a) {
+              return '<div style="font-size:var(--text-xs);color:var(--text-secondary);margin-bottom:4px;">• ' + escapeHtml(a) + "</div>";
+            })
+            .join("");
+        compListEl.appendChild(noteCard);
       } else if (payload.reason) {
-        const p = document.createElement("p");
-        p.style.fontSize = "var(--text-sm)";
-        p.style.color = "var(--text-secondary)";
+        hasCompContent = true;
+        const p = document.createElement("div");
+        p.className = "drawer-comp-card";
         p.textContent = payload.reason;
         compListEl.appendChild(p);
       }
+
+      compSecEl.style.display = hasCompContent ? "block" : "none";
     }
 
-    // Strato 3: Come si calcola (Formula renderizzata in HTML matematico, Parametri, Limiti)
+    // 3. Strato "Come si calcola" (Formula matematica, Parametri in griglia a 2 colonne, Limiti)
     const hw = payload.how_it_works || {};
     if (howTitleEl) howTitleEl.textContent = hw.title || "Come si calcola (formula, parametri e limiti)";
     if (howFormulaEl) {
-      const rawLatex = hw.formula_latex || "z = \\frac{x - m_{30}}{1.4826 \\cdot \\text{MAD}_{30}}";
+      const rawLatex =
+        hw.formula_latex ||
+        "z_{\\text{rob}} = \\frac{x_t - m_{30}}{1.4826 \\cdot \\text{MAD}_{30}}, \\quad \\text{MAD}_{30} = \\text{mediana}(|x - m_{30}|)";
       howFormulaEl.innerHTML = renderLatexToHtml(rawLatex);
     }
     if (howParamsEl) {
       howParamsEl.innerHTML = "";
-      if (hw.parameters && typeof hw.parameters === "object") {
-        Object.keys(hw.parameters).forEach(function (k) {
-          const li = document.createElement("div");
-          li.style.marginBottom = "4px";
-          li.innerHTML = "<strong>" + escapeHtml(k) + ":</strong> " + escapeHtml(hw.parameters[k]);
-          howParamsEl.appendChild(li);
-        });
-      }
+      const paramsObj = hw.parameters || {
+        "Finestra mobile": "30 giorni precedenti al giorno selezionato",
+        "Giorni minimi richiesti": "14 giorni validi (altrimenti 'calibrazione in corso')",
+        "Soglia in linea": "|z| ≤ 0.75 deviazioni standard robuste"
+      };
+      Object.keys(paramsObj).forEach(function (k) {
+        const item = document.createElement("div");
+        item.className = "drawer-param-item";
+        item.innerHTML =
+          '<div class="drawer-kpi-label">' + escapeHtml(k) + "</div>" +
+          '<div style="color:var(--text-primary);font-weight:600;margin-top:2px;">' + escapeHtml(paramsObj[k]) + "</div>";
+        howParamsEl.appendChild(item);
+      });
     }
     if (howLimitsEl) {
       howLimitsEl.textContent =
@@ -339,7 +549,6 @@
         "Stime derivate da sensore ottico da polso: non costituiscono indicazioni o diagnosi mediche.";
     }
 
-    // Mostriamo subito la sezione "Come si calcola" aperta così la formula matematica è immediatamente visibile
     if (howContentEl) howContentEl.classList.add("open");
     if (howToggleBtn) howToggleBtn.setAttribute("aria-expanded", "true");
 
@@ -373,14 +582,135 @@
   }
 
   /* ========================================================================
-     3. HELPER PLOTLY (Seguono i token CSS Chiaro/Scuro, niente CDN)
+     3. MINI-CALENDARIO INTERATTIVO CON I GIORNI DISPONIBILI
+     ======================================================================== */
+
+  const ITALIAN_MONTHS = [
+    "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
+    "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"
+  ];
+
+  function initMiniCalendar() {
+    const wrap = document.getElementById("date-selector-wrap");
+    const toggleBtn = document.getElementById("calendar-toggle-btn");
+    const popover = document.getElementById("calendar-popover");
+    const prevBtn = document.getElementById("cal-prev-month");
+    const nextBtn = document.getElementById("cal-next-month");
+    const monthLabel = document.getElementById("cal-month-label");
+    const daysGrid = document.getElementById("cal-days-grid");
+
+    if (!wrap || !toggleBtn || !popover || !daysGrid) return;
+
+    let availList = [];
+    try {
+      availList = JSON.parse(wrap.getAttribute("data-available-days") || "[]");
+    } catch (e) {
+      availList = [];
+    }
+    const availSet = new Set(availList);
+    const currentDay = wrap.getAttribute("data-current-day") || (availList[availList.length - 1] || "2026-10-30");
+    const baseUrl = wrap.getAttribute("data-base-url") || "/";
+
+    const parts = currentDay.split("-");
+    let viewYear = parseInt(parts[0], 10) || 2026;
+    let viewMonth = (parseInt(parts[1], 10) || 10) - 1; // 0-indexed
+
+    function renderMonth() {
+      if (monthLabel) {
+        monthLabel.textContent = ITALIAN_MONTHS[viewMonth] + " " + viewYear;
+      }
+      daysGrid.innerHTML = "";
+
+      const firstDayObj = new Date(Date.UTC(viewYear, viewMonth, 1));
+      // Lunedì = 0 ... Domenica = 6
+      const startWeekday = (firstDayObj.getUTCDay() + 6) % 7;
+      const daysInMonth = new Date(Date.UTC(viewYear, viewMonth + 1, 0)).getUTCDate();
+
+      for (let e = 0; e < startWeekday; e++) {
+        const emptyCell = document.createElement("div");
+        emptyCell.className = "cal-day-cell cal-day-empty";
+        daysGrid.appendChild(emptyCell);
+      }
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const mm = String(viewMonth + 1).padStart(2, "0");
+        const dd = String(d).padStart(2, "0");
+        const isoStr = viewYear + "-" + mm + "-" + dd;
+        const isAvail = availSet.has(isoStr);
+        const isActive = isoStr === currentDay;
+
+        if (isAvail) {
+          const link = document.createElement("a");
+          link.href = baseUrl + "?day=" + isoStr;
+          link.className = "cal-day-cell cal-day-avail" + (isActive ? " cal-day-active" : "");
+          link.textContent = String(d);
+          link.title = "Vai a " + isoStr;
+          daysGrid.appendChild(link);
+        } else {
+          const span = document.createElement("span");
+          span.className = "cal-day-cell cal-day-disabled";
+          span.textContent = String(d);
+          daysGrid.appendChild(span);
+        }
+      }
+    }
+
+    toggleBtn.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      const isOpen = popover.classList.toggle("open");
+      toggleBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      popover.setAttribute("aria-hidden", isOpen ? "false" : "true");
+      if (isOpen) {
+        renderMonth();
+      }
+    });
+
+    if (prevBtn) {
+      prevBtn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        viewMonth--;
+        if (viewMonth < 0) {
+          viewMonth = 11;
+          viewYear--;
+        }
+        renderMonth();
+      });
+    }
+
+    if (nextBtn) {
+      nextBtn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        viewMonth++;
+        if (viewMonth > 11) {
+          viewMonth = 0;
+          viewYear++;
+        }
+        renderMonth();
+      });
+    }
+
+    popover.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+    });
+
+    document.addEventListener("click", function () {
+      if (popover.classList.contains("open")) {
+        popover.classList.remove("open");
+        toggleBtn.setAttribute("aria-expanded", "false");
+        popover.setAttribute("aria-hidden", "true");
+      }
+    });
+  }
+
+  /* ========================================================================
+     4. HELPER PLOTLY (Tema Scuro)
      ======================================================================== */
 
   function basePlotlyLayout(yTitle) {
-    const textSecondary = getCssToken("--text-secondary") || "#4B5563";
-    const gridLine = getCssToken("--grid-line") || "rgba(15,23,42,0.06)";
-    const bgCard = getCssToken("--bg-card") || "#FFFFFF";
-    const textPrimary = getCssToken("--text-primary") || "#111827";
+    const textSecondary = getCssToken("--text-secondary") || "#A1A8B8";
+    const gridLine = getCssToken("--grid-line") || "rgba(255,255,255,0.07)";
+    const bgCard = getCssToken("--bg-card") || "#151821";
+    const textPrimary = getCssToken("--text-primary") || "#F3F4F6";
     const fontSans = getCssToken("--font-sans") || "-apple-system, system-ui, sans-serif";
 
     return {
@@ -413,8 +743,8 @@
     const el = document.getElementById(containerId);
     if (!el || typeof Plotly === "undefined" || !Array.isArray(seriesData) || seriesData.length === 0) return;
 
-    const areaColor = getCssToken(opts.colorToken || "--color-recovery") || "#0D9488";
-    const bandFill = getCssToken("--band-fill") || "rgba(100,116,139,0.15)";
+    const areaColor = getCssToken(opts.colorToken || "--color-recovery") || "#2DD4BF";
+    const bandFill = getCssToken("--band-fill") || "rgba(161,168,184,0.15)";
     const unit = opts.unit || "";
 
     const x = seriesData.map(function (d) { return d.day; });
@@ -465,7 +795,7 @@
         type: "scatter",
         mode: "lines",
         name: opts.overlayName || "Media mobile",
-        line: { color: getCssToken("--text-primary") || "#374151", width: 1.8, dash: "dot" },
+        line: { color: getCssToken("--text-primary") || "#F3F4F6", width: 1.8, dash: "dot" },
         hovertemplate: "%{x}<br>%{y} " + unit + "<extra></extra>"
       });
     }
@@ -477,7 +807,7 @@
         type: "scatter",
         mode: "lines",
         name: opts.targetLabel || "Fabbisogno",
-        line: { color: getCssToken("--text-muted") || "#6B7280", width: 1.4, dash: "dash" },
+        line: { color: getCssToken("--text-muted") || "#6E7687", width: 1.4, dash: "dash" },
         hoverinfo: "skip"
       });
     }
@@ -504,7 +834,7 @@
       texts.push(iv.start_iso + " – " + iv.end_iso + " (" + iv.stage_name.toUpperCase() + ", " + iv.duration_min + " min)");
     });
 
-    const sleepColor = getCssToken("--color-sleep") || "#4F46E5";
+    const sleepColor = getCssToken("--color-sleep") || "#818CF8";
     const layout = basePlotlyLayout("Stadio");
     layout.xaxis.title = { text: "Ore dall'addormentamento (h)", font: { size: 11 } };
     layout.yaxis.tickvals = [1, 2, 3, 4];
@@ -522,7 +852,7 @@
           mode: "lines",
           line: { shape: "hv", color: sleepColor, width: 2.5 },
           fill: "tozeroy",
-          fillcolor: getCssToken("--color-sleep-soft") || "rgba(79,70,229,0.13)",
+          fillcolor: getCssToken("--color-sleep-soft") || "rgba(129,140,248,0.16)",
           hovertemplate: "%{text}<extra></extra>"
         }
       ],
@@ -536,9 +866,9 @@
     if (!el || typeof Plotly === "undefined" || !Array.isArray(historyData) || historyData.length === 0) return;
 
     const x = historyData.map(function (d) { return d.day; });
-    const cRec = getCssToken("--color-recovery") || "#0D9488";
-    const cStr = getCssToken("--color-strain") || "#EA580C";
-    const cSlp = getCssToken("--color-sleep") || "#4F46E5";
+    const cRec = getCssToken("--color-recovery") || "#2DD4BF";
+    const cStr = getCssToken("--color-strain") || "#FB923C";
+    const cSlp = getCssToken("--color-sleep") || "#818CF8";
 
     const layout = basePlotlyLayout("Punti (0-100)");
     layout.yaxis.range = [0, 105];
@@ -595,28 +925,28 @@
           y: historyData.map(function (d) { return d.sleep_deep_h; }),
           type: "bar",
           name: "Profondo (h)",
-          marker: { color: getCssToken("--hypno-deep") || "#3730A3" }
+          marker: { color: getCssToken("--hypno-deep") || "#4F46E5" }
         },
         {
           x: x,
           y: historyData.map(function (d) { return d.sleep_rem_h; }),
           type: "bar",
           name: "REM (h)",
-          marker: { color: getCssToken("--hypno-rem") || "#818CF8" }
+          marker: { color: getCssToken("--hypno-rem") || "#A5B4FC" }
         },
         {
           x: x,
           y: historyData.map(function (d) { return d.sleep_light_h; }),
           type: "bar",
           name: "Leggero (h)",
-          marker: { color: getCssToken("--hypno-light") || "#6366F1" }
+          marker: { color: getCssToken("--hypno-light") || "#818CF8" }
         },
         {
           x: x,
           y: historyData.map(function (d) { return d.sleep_awake_h; }),
           type: "bar",
           name: "Veglia (h)",
-          marker: { color: getCssToken("--hypno-awake") || "#9CA3AF" }
+          marker: { color: getCssToken("--hypno-awake") || "#71717A" }
         }
       ],
       layout,
@@ -629,9 +959,9 @@
     if (!el || typeof Plotly === "undefined" || !Array.isArray(historyData) || historyData.length === 0) return;
 
     const x = historyData.map(function (d) { return d.day; });
-    const cRec = getCssToken("--color-recovery") || "#0D9488";
-    const cStr = getCssToken("--color-strain") || "#EA580C";
-    const bandFill = getCssToken("--color-recovery-soft") || "rgba(13,148,136,0.13)";
+    const cRec = getCssToken("--color-recovery") || "#2DD4BF";
+    const cStr = getCssToken("--color-strain") || "#FB923C";
+    const bandFill = getCssToken("--color-recovery-soft") || "rgba(45,212,191,0.16)";
 
     const layout = basePlotlyLayout("Punti (0-100)");
     layout.yaxis.range = [0, 105];
@@ -686,9 +1016,9 @@
     const meta1 = (metaMap && metaMap[m1Key]) || { label: m1Key, unit: "", color_var: "--color-recovery" };
     const meta2 = (metaMap && metaMap[m2Key]) || { label: m2Key, unit: "", color_var: "--color-sleep" };
 
-    const c1 = getCssToken(meta1.color_var || "--color-recovery") || "#0D9488";
-    const c2 = getCssToken(meta2.color_var || "--color-sleep") || "#4F46E5";
-    const color2 = c1 === c2 ? (getCssToken("--color-strain") || "#EA580C") : c2;
+    const c1 = getCssToken(meta1.color_var || "--color-recovery") || "#2DD4BF";
+    const c2 = getCssToken(meta2.color_var || "--color-sleep") || "#818CF8";
+    const color2 = c1 === c2 ? (getCssToken("--color-strain") || "#FB923C") : c2;
 
     const x = historyData.map(function (d) { return d.day; });
     const y1 = historyData.map(function (d) { return getVal(d, m1Key); });
@@ -742,13 +1072,12 @@
     const changepoints = trendObj.value.cusum_changepoints || [];
     const mk = trendObj.value.theil_sen_mann_kendall || {};
 
-    const cMain = getCssToken(colorToken || "--color-recovery") || "#0D9488";
-    const cAlert = getCssToken("--color-strain") || "#EA580C";
+    const cMain = getCssToken(colorToken || "--color-recovery") || "#2DD4BF";
+    const cAlert = getCssToken("--color-strain") || "#FB923C";
     const x = series.map(function (d) { return d.day; });
     const y = series.map(function (d) { return d.value; });
     const ewma = series.map(function (d) { return d.ewma_7d; });
 
-    // Retta robusta di Theil-Sen
     const validPts = series.filter(function (d) { return d.value !== null && d.value !== undefined; });
     const tsLine = [];
     if (validPts.length >= 2 && mk.slope_per_day !== undefined) {
@@ -776,7 +1105,7 @@
         type: "scatter",
         mode: "lines",
         name: "EWMA 7g",
-        line: { color: getCssToken("--text-primary") || "#111827", width: 1.8, dash: "dot" }
+        line: { color: getCssToken("--text-primary") || "#F3F4F6", width: 1.8, dash: "dot" }
       }
     ];
 
@@ -787,7 +1116,7 @@
         type: "scatter",
         mode: "lines",
         name: "Pendenza Theil-Sen (" + (mk.slope_per_week >= 0 ? "+" : "") + mk.slope_per_week + " " + unit + "/sett)",
-        line: { color: getCssToken("--text-muted") || "#6B7280", width: 1.6, dash: "dash" }
+        line: { color: getCssToken("--text-muted") || "#6E7687", width: 1.6, dash: "dash" }
       });
     }
 
@@ -824,7 +1153,7 @@
     if (!el || typeof Plotly === "undefined" || !trendObj || !trendObj.calculable) return;
 
     const cycle = trendObj.value.weekly_cycle || [];
-    const color = getCssToken(colorToken || "--color-recovery") || "#0D9488";
+    const color = getCssToken(colorToken || "--color-recovery") || "#2DD4BF";
     const layout = basePlotlyLayout(unit);
     layout.showlegend = false;
 
@@ -836,7 +1165,7 @@
           y: cycle.map(function (c) { return c.mean; }),
           type: "bar",
           name: label,
-          marker: { color: color, opacity: 0.85 },
+          marker: { color: color, opacity: 0.88 },
           hovertemplate: "%{x}<br>Media: <b>%{y} " + unit + "</b><extra></extra>"
         }
       ],
@@ -886,9 +1215,9 @@
           zmin: -1,
           zmax: 1,
           colorscale: [
-            [0.0, "#EA580C"],
-            [0.5, "#E5E7EB"],
-            [1.0, "#0D9488"]
+            [0.0, "#FB923C"],
+            [0.5, "#1E222E"],
+            [1.0, "#2DD4BF"]
           ],
           hovertemplate: "X: %{x}<br>Y: %{y}<br><b>ρ = %{text}</b><extra></extra>",
           showscale: true
@@ -920,8 +1249,8 @@
 
     const metaX = (metricMeta && metricMeta[mx]) || { label: mx, unit: "" };
     const metaY = (metricMeta && metricMeta[my]) || { label: my, unit: "" };
-    const cSleep = getCssToken("--color-sleep") || "#4F46E5";
-    const cRec = getCssToken("--color-recovery") || "#0D9488";
+    const cSleep = getCssToken("--color-sleep") || "#818CF8";
+    const cRec = getCssToken("--color-recovery") || "#2DD4BF";
 
     const traces = [
       {
@@ -931,12 +1260,11 @@
         type: "scatter",
         mode: "markers",
         name: "Giorni osservati (n=" + xs.length + ")",
-        marker: { size: 8, color: cSleep, opacity: 0.78 },
+        marker: { size: 8, color: cSleep, opacity: 0.82 },
         hovertemplate: "%{text}<br>" + metaX.label + ": <b>%{x}</b><br>" + metaY.label + ": <b>%{y}</b><extra></extra>"
       }
     ];
 
-    // Retta di tendenza lineare semplice (OLS) a solo scopo visivo
     if (xs.length >= 3) {
       const n = xs.length;
       const meanX = xs.reduce(function (a, b) { return a + b; }, 0) / n;
@@ -954,7 +1282,7 @@
         const maxX = Math.max.apply(null, xs);
         traces.push({
           x: [minX, maxX],
-          y: [ intercept + slope * minX, intercept + slope * maxX ],
+          y: [intercept + slope * minX, intercept + slope * maxX],
           type: "scatter",
           mode: "lines",
           name: "Tendenza lineare",
@@ -971,41 +1299,18 @@
   }
 
   /* ========================================================================
-     4. INIZIALIZZAZIONE DOM E SELETTORE TEMA CHIARO/SCURO
+     5. INIZIALIZZAZIONE DOM (Tema Scuro, Mini-Calendario, Formule, Drawer)
      ======================================================================== */
 
-  function applyTheme(theme) {
-    if (theme === "dark") {
-      document.documentElement.setAttribute("data-theme", "dark");
-    } else {
-      document.documentElement.setAttribute("data-theme", "light");
-    }
-    const btn = document.getElementById("theme-toggle-btn");
-    if (btn) {
-      btn.textContent = theme === "dark" ? "☀ Tema Chiaro" : "☾ Tema Scuro";
-    }
-  }
-
   document.addEventListener("DOMContentLoaded", function () {
-    // Imposta tema iniziale (default: light per massima chiarezza, salvo scelta salvata o ?theme=...)
-    const forced = document.documentElement.getAttribute("data-theme");
-    if (!forced) {
-      const saved = localStorage.getItem("garmin_dashboard_theme") || "light";
-      applyTheme(saved);
-    } else {
-      applyTheme(forced);
-    }
+    // Forza sempre il tema scuro
+    document.documentElement.setAttribute("data-theme", "dark");
+    try {
+      localStorage.removeItem("garmin_dashboard_theme");
+    } catch (e) {}
 
-    const themeBtn = document.getElementById("theme-toggle-btn");
-    if (themeBtn) {
-      themeBtn.addEventListener("click", function () {
-        const current = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
-        const next = current === "dark" ? "light" : "dark";
-        localStorage.setItem("garmin_dashboard_theme", next);
-        applyTheme(next);
-        window.dispatchEvent(new Event("resize"));
-      });
-    }
+    // Inizializza il mini-calendario dei giorni disponibili
+    initMiniCalendar();
 
     // Renderizza tutte le formule LaTeX inline presenti nella pagina (.js-render-latex)
     document.querySelectorAll(".js-render-latex").forEach(function (el) {
@@ -1013,11 +1318,11 @@
       el.innerHTML = renderLatexToHtml(raw);
     });
 
-    // Apertura pannello dai pulsanti/schede con attributo data-detail-json
+    // Apertura pannello dai pulsanti/schede/righe con attributo data-detail-json
     document.querySelectorAll("[data-detail-json]").forEach(function (el) {
       el.addEventListener("click", function () {
         try {
-          const parsed = JSON.parse(el.getAttribute("data-detail-json"));
+          const parsed = JSON.parse(el.getAttribute("data-detail-json") || "{}");
           openDetailDrawer(parsed, el);
         } catch (err) {
           console.error("Impossibile leggere data-detail-json", err);
@@ -1050,6 +1355,10 @@
     document.addEventListener("keydown", function (ev) {
       if (ev.key === "Escape") {
         closeDetailDrawer(false);
+        const pop = document.getElementById("calendar-popover");
+        if (pop && pop.classList.contains("open")) {
+          pop.classList.remove("open");
+        }
       }
     });
 

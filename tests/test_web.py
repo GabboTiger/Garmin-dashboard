@@ -69,6 +69,24 @@ def test_web_routes_and_json_detail_attributes(tmp_path: Path) -> None:
     assert csv_acts.status_code == 200
     assert "activity_id,day,start_local" in csv_acts.get_data(as_text=True)
 
+    # Verifica tema scuro fisso, calendario con giorni disponibili e sezioni del pannello laterale
+    home_html = client.get("/").get_data(as_text=True)
+    assert 'data-theme="dark"' in home_html
+    assert 'id="theme-toggle-btn"' not in home_html
+    assert 'id="calendar-popover"' in home_html
+    assert 'id="drawer-kpi-grid"' in home_html
+    assert 'id="drawer-zones-bars"' in home_html
+    avail_match = re.search(r'data-available-days="([^"]*)"', home_html)
+    assert avail_match is not None
+    avail_days = json.loads(html.unescape(avail_match.group(1)))
+    assert isinstance(avail_days, list) and len(avail_days) >= 35
+
+    # Verifica arricchimento tabella attività e payload KPI nel drawer
+    acts_html = client.get("/activities").get_data(as_text=True)
+    assert "mini-zone-stack" in acts_html
+    assert '"kpis":' in html.unescape(acts_html)
+    assert '"zones_bars":' in html.unescape(acts_html)
+
 
 def test_spo2_iso_timestamp_from_real_garmin() -> None:
     """Verifica che `compute_nocturnal_physiology_and_debt` gestisca `epochTimestamp` sia come

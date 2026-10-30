@@ -77,3 +77,37 @@ def test_nocturnal_physiology_spo2_threshold_and_sleep_debt() -> None:
     assert val["sleep_debt_7d_min"] is not None and val["sleep_debt_7d_min"] >= 0.0
     assert val["sleep_debt_14d_hours"] is not None
 
+
+def test_hypnogram_timezone_offset_applied() -> None:
+    """Verifica che il delta tra ora GMT e ora locale del dispositivo Garmin (+1h o +2h)
+    venga applicato correttamente agli intervalli dell'ipnogramma per mostrare gli orari reali di sonno e sveglia.
+    """
+    # Esempio: addormentamento 23:15 GMT -> 00:15 Locale (+1h = +3600000 ms), sveglia 07:13 GMT -> 08:13 Locale
+    payload = {
+        "dailySleepDTO": {
+            "sleepStartTimestampGMT": 1793315731000,
+            "sleepStartTimestampLocal": 1793319331000,  # +1h
+        },
+        "sleepLevels": [
+            {
+                "startGMT": "2026-10-29T23:15:31.0",
+                "endGMT": "2026-10-29T23:45:31.0",
+                "activityLevel": 1.0,
+            },
+            {
+                "startGMT": "2026-10-30T07:00:31.0",
+                "endGMT": "2026-10-30T07:13:31.0",
+                "activityLevel": 1.0,
+            },
+        ],
+    }
+    intervals = sleep.extract_hypnogram_intervals(payload)
+    assert len(intervals) == 2
+    # Invece di 23:15, deve essere convertito a 00:15
+    assert intervals[0]["start_iso"] == "00:15"
+    assert intervals[0]["end_iso"] == "00:45"
+    # L'ultimo intervallo (sveglia) deve essere 08:13 anziché 07:13 GMT
+    assert intervals[1]["start_iso"] == "08:00"
+    assert intervals[1]["end_iso"] == "08:13"
+
+

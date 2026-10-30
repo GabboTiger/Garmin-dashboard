@@ -48,10 +48,33 @@ def _parse_iso_or_ms(val: Any) -> datetime | None:
         return None
 
 
+def _extract_sleep_offset_timedelta(sleep_payload: dict[str, Any] | None) -> timedelta:
+    """Ricava la differenza tra ora locale del dispositivo e UTC/GMT dal payload del sonno Garmin.
+    
+    In Garmin Connect, `sleepStartTimestampLocal` e `sleepStartTimestampGMT` permettono di calcolare
+    esattamente il delta di fuso orario (es. +1h in inverno, +2h in estate per l'Italia) per convertire
+    gli orari degli stadi (`sleepLevels`) e della frequenza notturna (`sleepHeartRate`) da GMT a ora locale.
+    """
+    if not isinstance(sleep_payload, dict):
+        return timedelta(0)
+    dto = sleep_payload.get("dailySleepDTO")
+    if not isinstance(dto, dict):
+        dto = sleep_payload
+    start_gmt = dto.get("sleepStartTimestampGMT")
+    start_loc = dto.get("sleepStartTimestampLocal")
+    if start_gmt is not None and start_loc is not None:
+        try:
+            diff_ms = int(start_loc) - int(start_gmt)
+            return timedelta(milliseconds=diff_ms)
+        except (ValueError, TypeError):
+            pass
+    return timedelta(0)
+
+
 def extract_hypnogram_intervals(sleep_payload: dict[str, Any] | None) -> list[dict[str, Any]]:
     """Estrae la sequenza temporale dell'ipnogramma (`sleepLevels`) da `get_sleep_data(day)`.
 
-    Restituisce una lista ordinata di intervalli:
+    Restituisce una lista ordinata di intervalli convertiti nell'ora locale dell'utente:
       `{start_iso, end_iso, start_offset_min, end_offset_min, duration_min, stage_code, stage_name}`
     dove `stage_code` in Garmin è: 0 = Deep, 1 = Light, 2 = REM, 3 = Awake.
     """
@@ -78,15 +101,19 @@ def extract_hypnogram_intervals(sleep_payload: dict[str, Any] | None) -> list[di
 
     parsed_items.sort(key=lambda x: x[0])
     t0 = parsed_items[0][0]
+    offset = _extract_sleep_offset_timedelta(sleep_payload)
+
     intervals: list[dict[str, Any]] = []
     for st, en, code in parsed_items:
         dur_m = (en - st).total_seconds() / 60.0
         st_off = (st - t0).total_seconds() / 60.0
         en_off = (en - t0).total_seconds() / 60.0
+        st_loc = st + offset
+        en_loc = en + offset
         intervals.append(
             {
-                "start_iso": st.strftime("%H:%M"),
-                "end_iso": en.strftime("%H:%M"),
+                "start_iso": st_loc.strftime("%H:%M"),
+                "end_iso": en_loc.strftime("%H:%M"),
                 "start_offset_min": round(st_off, 1),
                 "end_offset_min": round(en_off, 1),
                 "duration_min": round(dur_m, 1),
@@ -281,8 +308,14 @@ def compute_sleep_regularity(
         awake_m = r.get("sleep_awake_min") or 0.0
         if bed_m is None or tot_m is None or float(tot_m) <= 0:
             continue
-        span_m = float(tot_m) + float(awake_m)
-        wake_m = bed_m + span_m
+        wake_m = _hhmm_to_rel_minutes(r.get("sleep_end_local"))
+        if wake_m is None:
+            span_m = float(tot_m) + float(awake_m)
+            wake_m = bed_m + span_m
+        else:
+            if wake_m <= bed_m:
+                wake_m += 1440.0
+            span_m = wake_m - bed_m
         mid_m = bed_m + 0.5 * span_m
         d_obj = date.fromisoformat(d_str)
         valid_nights.append(
@@ -401,7 +434,8 @@ def compute_nocturnal_physiology_and_debt(
             min_hr_bpm = round(float(best_pt["value"]), 1)
             dt_min = _parse_iso_or_ms(best_pt.get("startGMT"))
             if dt_min is not None:
-                min_hr_time_hhmm = dt_min.strftime("%H:%M")
+                offset = _extract_sleep_offset_timedelta(sleep_payload)
+                min_hr_time_hhmm = (dt_min + offset).strftime("%H:%M")
 
     # 2. Tempo sotto soglia SpO2 da `wellnessEpochSPO2DataDTOList`
     spo2_below_min: float | None = None

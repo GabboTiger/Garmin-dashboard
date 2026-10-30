@@ -94,3 +94,4 @@ Il test verifica che `spearman_corr_with_lag` ritrovi esattamente questi legami 
 - `sleep_total_min(t)` vs `hrv_night_ms(t+1)` ($\text{lag}=1$) ha $\rho > 0.45$, ed è nettamente più forte rispetto a $\text{lag}=0$ (`assert sleep_to_next_hrv["rho"] > sleep_to_same_hrv["rho"] + 0.25`), perché il sonno della notte $t$ precede l'HRV della notte $t+1$.
 - `training_load_daily(t)` vs `rhr_bpm(t+1)` ($\text{lag}=1$) ha $\rho > 0.40$ (uno sforzo elevato oggi alza la FC a riposo domani).
 - `stress_avg(t)` vs `bb_max(t)` ($\text{lag}=0$) ha $\rho < -0.55$ (più stress nella giornata corrisponde a una Body Battery massima più bassa).
+

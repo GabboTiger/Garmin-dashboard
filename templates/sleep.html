@@ -12,7 +12,12 @@
     <div class="card-header">
       <div>
         <span class="card-label" style="color: var(--color-sleep);">Ipnogramma a Gradini della Notte ({{ day }})</span>
-        <div class="card-subtitle">Sequenza temporale degli stadi (Profondo, Leggero, REM, Veglia)</div>
+        <div class="card-subtitle" style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 6px; font-size: 0.85rem;">
+          <span>💤 <strong>Addormentamento:</strong> {{ latest.sleep_start_local or "—" }}</span>
+          <span>⏰ <strong>Sveglia:</strong> {{ latest.sleep_end_local or "—" }}</span>
+          <span>🛏️ <strong>A letto:</strong> {% if latest and latest.sleep_total_min is not none %}{{ (((latest.sleep_total_min or 0) + (latest.sleep_awake_min or 0)) / 60.0) | round(1) }} h ({{ ((latest.sleep_total_min or 0) + (latest.sleep_awake_min or 0)) | round | int }}m){% else %}—{% endif %}</span>
+          <span>✨ <strong>Sonno reale:</strong> {% if latest and latest.sleep_total_min is not none %}{{ (latest.sleep_total_min / 60.0) | round(1) }} h ({{ latest.sleep_total_min | round | int }}m){% else %}—{% endif %}</span>
+        </div>
       </div>
       <span class="quality-pill">
         {% if sleep_arch and sleep_arch.calculable %}

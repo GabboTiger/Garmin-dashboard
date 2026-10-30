@@ -175,12 +175,25 @@ res = sync.sync_garmin_data(conn, client, days=1)
 assert res["status"] == "ok"
 ```
 
-### Il Metodo Monte Carlo con Seme Fisso (`seed`)
-Nei test di simulazione usiamo un seme deterministico:
-```python
-rng = np.random.default_rng(seed=42)
-```
-La sequenza casuale generata è perfettamente riproducibile su qualsiasi computer, consentendo `assert` matematici rigorosi.
+### Il Metodo Monte Carlo: Perché Dati Sintetici se Abbiamo Quelli Reali?
+Una domanda tipica di fisica/ingegneria è: *se abbiamo già le risposte reali della Garmin sul dispositivo, che senso ha costruire un generatore sintetico Monte Carlo?*
+
+Ci sono **4 motivi scientifici e ingegneristici fondamentali**:
+1. **Verifica della "Verità a Priori" (*Ground Truth Validation*)**:
+   - Nei dati biologici reali, la vera legge fisiologica sottostante è incognita e confusa da mille variabili non controllate (stress, alimentazione, temperatura, rumore del sensore). Se l'algoritmo calcola una correlazione tra carico e calo di HRV pari a $-0.45$, non puoi sapere a priori se il codice è corretto o se contiene un bug matematico.
+   - Con la simulazione Monte Carlo ([`app/synthetic.py`](file:///Users/gabriel/Developer/garmin-dashboard/app/synthetic.py)), **imponiamo noi la legge fisica per costruzione**:
+     $$\text{HRV}_t = 62 - 0.055 \cdot \text{Carico}_{t-1} + \eta_t, \quad \eta_t \sim \mathcal{N}(0, \sigma^2)$$
+     Il test [`test_synthetic_known_correlations_recovered`](file:///Users/gabriel/Developer/garmin-dashboard/tests/test_synthetic.py) esegue l'algoritmo di analisi e verifica numericamente che esso recuperi esattamente il coefficiente inserito $\beta \in [0.045, 0.065]$. Se fallisce, sappiamo con certezza deterministica che c'è un errore nell'algoritmo.
+2. **Stress Testing di Casi Limite e Singolarità (*Edge Cases*)**:
+   - Per testare come reagisce la dashboard in caso di febbre acuta (caduta improvvisa di HRV e picco di RHR), settimana di infortunio (zero allenamenti per 14 giorni), notte completamente insonne o perdita di pacchetti del sensore (`NULL`), con i dati reali dovresti aspettare mesi o anni che questi eventi si verifichino. Con Monte Carlo li puoi generare istantaneamente e verificare che il sistema non collassi con divisioni per zero (`ZeroDivisionError`) o matrici singolari.
+3. **Riproducibilità Deterministica nei Test (CI/CD)**:
+   - I test automatizzati devono girare in meno di 2 secondi, offline e su qualsiasi computer, senza dipendere dal login Garmin. Fissando il seme del generatore pseudocasuale:
+     ```python
+     rng = np.random.default_rng(seed=42)
+     ```
+     la sequenza generata è identica bit per bit a ogni esecuzione, rendendo gli `assert` matematici solidi e riproducibili al 100%.
+4. **Privacy e Modalità Demo (Zero Credenziali)**:
+   - Permette a chiunque di testare l'intera interfaccia grafica, visualizzare grafici complessi e verificare il design system senza dover inserire credenziali Garmin reali e senza dover esporre i propri dati biometrici personali.
 
 ### Il Test Client di Flask (senza aprire porte di rete)
 In [`tests/test_web.py`](file:///Users/gabriel/Developer/garmin-dashboard/tests/test_web.py):
@@ -226,3 +239,4 @@ Per prendere confidenza con il codice, prova a fare questi piccoli esperimenti:
    ```bash
    sqlite3 data/garmin.db "SELECT * FROM daily_tags;"
    ```
+

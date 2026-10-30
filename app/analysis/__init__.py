@@ -19,6 +19,12 @@ from app.analysis.correlations import (
     compute_correlation_matrix,
     spearman_corr_with_lag,
 )
+from app.analysis.sleep import (
+    compute_nocturnal_physiology_and_debt,
+    compute_sleep_architecture,
+    compute_sleep_regularity,
+    extract_hypnogram_intervals,
+)
 
 __all__ = [
     "DISCLAIMER_CORRELATION",
@@ -29,10 +35,14 @@ __all__ = [
     "compute_completeness",
     "compute_correlation_matrix",
     "compute_heart_rate_recovery",
+    "compute_nocturnal_physiology_and_debt",
+    "compute_sleep_architecture",
+    "compute_sleep_regularity",
     "compute_speed_hr_efficiency",
     "compute_trimp",
     "compute_weekly_zone_distribution",
     "extract_activity_timeseries",
+    "extract_hypnogram_intervals",
     "make_not_calculable",
     "make_result",
     "spearman_corr_with_lag",

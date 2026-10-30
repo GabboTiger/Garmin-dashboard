@@ -27,9 +27,10 @@
   </article>
 </section>
 
-<!-- Metriche di carico e distribuzione zone -->
-<h2 class="section-title">Sintesi Carico e Distribuzione Settimanale Zone FC</h2>
+<!-- Metriche di carico, Monotonia di Foster e distribuzione zone -->
+<h2 class="section-title">Sintesi Carico, Monotonia di Foster e Distribuzione Settimanale Zone FC</h2>
 {% set ls_val = load_stats.value if load_stats and load_stats.calculable else {} %}
+{% set fs_val = foster_stats.value if foster_stats and foster_stats.calculable else {} %}
 {% set wz_val = weekly_zones.value if weekly_zones and weekly_zones.calculable else {} %}
 <section class="grid-12">
   {{ render_metric_card("Carico Acuto (ATL 7g)", ls_val.get("atl_7d"), "TRIMP/g", None, load_stats, "--color-strain", "col-3") }}
@@ -37,13 +38,14 @@
   {{ render_metric_card("Bilancio TSB (Fitness-Fatica)", ls_val.get("tsb_form"), "pt", None, load_stats, "--color-strain", "col-3") }}
   {{ render_metric_card("Rapporto ACWR", ls_val.get("acwr"), "ratio", None, load_stats, "--color-strain", "col-3") }}
 
-  {{ render_metric_card("Tempo Zone 7g (Totale)", wz_val.get("total_zone_minutes"), "min", None, weekly_zones, "--color-strain", "col-4") }}
-  {{ render_metric_card("Quota Bassa Intensità (Z1+Z2)", wz_val.get("low_intensity_z1_z2_pct"), "%", None, weekly_zones, "--color-strain", "col-4") }}
-  {{ render_metric_card("Quota Alta Intensità (Z4+Z5)", wz_val.get("high_intensity_z4_z5_pct"), "%", None, weekly_zones, "--color-strain", "col-4") }}
+  {{ render_metric_card("Monotonia di Foster (7g)", fs_val.get("monotony_7d"), "indice", None, foster_stats, "--color-strain", "col-3") }}
+  {{ render_metric_card("Strain di Foster (7g)", fs_val.get("foster_strain_7d"), "pt", None, foster_stats, "--color-strain", "col-3") }}
+  {{ render_metric_card("Quota Bassa Intensità (Z1+Z2)", wz_val.get("low_intensity_z1_z2_pct"), "%", None, weekly_zones, "--color-strain", "col-3") }}
+  {{ render_metric_card("Quota Alta Intensità (Z4+Z5)", wz_val.get("high_intensity_z4_z5_pct"), "%", None, weekly_zones, "--color-strain", "col-3") }}
 </section>
 
-<!-- Grafici 2, 3 e 4: Confronto Settimanale Carico/Volume, Distribuzione Zone 8 settimane, Efficienza -->
-<h2 class="section-title">Confronto Settimanale (ultime 8 settimane) ed Efficienza Aerobica</h2>
+<!-- Grafici 2, 3, 4 e 5: Confronto Settimanale Carico/Volume, Distribuzione Zone, Monotonia di Foster, Efficienza -->
+<h2 class="section-title">Confronto Settimanale (8 settimane), Monotonia di Foster ed Efficienza Aerobica</h2>
 <section class="grid-12">
   <article class="card col-6">
     <div class="card-header">
@@ -67,7 +69,26 @@
     <div id="activities-weekly-zones-chart" class="chart-box"></div>
   </article>
 
-  <article class="card col-12">
+  <article class="card col-6">
+    <div class="card-header">
+      <div>
+        <span class="card-label" style="color: var(--color-strain);">Indice di Monotonia e Strain di Foster (60 giorni)</span>
+        <div class="card-subtitle">Alternanza carico/scarico (soglia critica Monotonia = 2.0 tratteggiata)</div>
+      </div>
+      {% if foster_stats and foster_stats.calculable %}
+        <button type="button" class="quality-pill" data-detail-json="{{ foster_stats | tojson | forceescape }}">
+          {{ foster_stats.value.status_label }} ▸
+        </button>
+      {% endif %}
+    </div>
+    {% if foster_stats and foster_stats.calculable %}
+      <div id="activities-foster-chart" class="chart-box"></div>
+    {% else %}
+      <div class="state-box">{{ foster_stats.reason if foster_stats else "Dati insufficienti per la Monotonia di Foster." }}</div>
+    {% endif %}
+  </article>
+
+  <article class="card col-6">
     <div class="card-header">
       <div>
         <span class="card-label" style="color: var(--color-recovery);">Efficienza Velocità/FC (m/battito) e TRIMP per Singola Seduta</span>
@@ -77,6 +98,176 @@
     </div>
     <div id="activities-efficiency-chart" class="chart-box"></div>
   </article>
+</section>
+
+<!-- Idea 4: Profilo Specifico Multi-Sport (Tennis vs Pesi vs Corsa) -->
+<h2 class="section-title">Profilo Fisiologico Multi-Sport (Confronto Tennis vs Pesi vs Corsa e Risposta Notte Successiva)</h2>
+<section class="grid-12">
+  <article class="card col-5">
+    <div class="card-header">
+      <div>
+        <span class="card-label" style="color: var(--color-strain);">Densità Cardiovascolare e Risposta HRV per Sport</span>
+        <div class="card-subtitle">Confronto TRIMP/min, Quota Z4+Z5 (%) e ΔHRV nella notte successiva (t+1)</div>
+      </div>
+      {% if multisport_stats and multisport_stats.calculable %}
+        <button type="button" class="quality-pill" data-detail-json="{{ multisport_stats | tojson | forceescape }}">
+          Formula ▸
+        </button>
+      {% endif %}
+    </div>
+    {% if multisport_stats and multisport_stats.calculable %}
+      <div id="activities-multisport-chart" class="chart-box"></div>
+    {% else %}
+      <div class="state-box">Nessuna attività disponibile per il confronto multi-sport.</div>
+    {% endif %}
+  </article>
+
+  <article class="card col-7">
+    <div class="card-header">
+      <div>
+        <span class="card-label" style="color: var(--color-recovery);">Tabella Comparativa per Disciplina e Recupero a t+1</span>
+        <div class="card-subtitle">
+          Come risponde il tuo sistema nervoso la notte dopo ciascuno sport
+          {% if multisport_stats and multisport_stats.calculable and multisport_stats.value.reference_rest_hrv_ms %}
+            (Rif. post-riposo: HRV {{ multisport_stats.value.reference_rest_hrv_ms }} ms · RHR {{ multisport_stats.value.reference_rest_rhr_bpm }} bpm)
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% if multisport_stats and multisport_stats.calculable and multisport_stats.value.sports %}
+      <div class="table-wrap">
+        <table class="table-clean">
+          <thead>
+            <tr>
+              <th>Disciplina</th>
+              <th>Sedute</th>
+              <th>Durata Media</th>
+              <th>TRIMP Medio</th>
+              <th>Densità</th>
+              <th>FC Med / Max</th>
+              <th>Z1+Z2 / Z4+Z5</th>
+              <th>HRV Notte Dopo (Δ)</th>
+              <th>RHR Mattina Dopo (Δ)</th>
+              <th>BB + / Profondo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for sp in multisport_stats.value.sports %}
+              <tr>
+                <td><strong style="color: {{ sp.color }};">{{ sp.label }}</strong></td>
+                <td><strong>{{ sp.sessions_count }}</strong></td>
+                <td>{{ sp.avg_duration_min }} min</td>
+                <td><strong>{{ sp.avg_trimp }}</strong></td>
+                <td><span class="quality-pill">{{ sp.trimp_per_min }} TRIMP/m</span></td>
+                <td>{{ sp.avg_hr_bpm|int if sp.avg_hr_bpm else "—" }} / {{ sp.max_hr_bpm|int if sp.max_hr_bpm else "—" }} bpm</td>
+                <td>{{ sp.low_z1_z2_pct }}% / <strong style="color: var(--color-strain);">{{ sp.high_z4_z5_pct }}%</strong></td>
+                <td>
+                  {% if sp.next_night_hrv_ms is not none %}
+                    <strong>{{ sp.next_night_hrv_ms }} ms</strong>
+                    {% if sp.next_night_hrv_delta_ms is not none %}
+                      <span style="font-size: 11px; color: {{ '#2DD4BF' if sp.next_night_hrv_delta_ms >= -1.0 else '#FB923C' }};">
+                        ({{ '+' if sp.next_night_hrv_delta_ms > 0 else '' }}{{ sp.next_night_hrv_delta_ms }} ms)
+                      </span>
+                    {% endif %}
+                  {% else %}—{% endif %}
+                </td>
+                <td>
+                  {% if sp.next_night_rhr_bpm is not none %}
+                    <strong>{{ sp.next_night_rhr_bpm }} bpm</strong>
+                    {% if sp.next_night_rhr_delta_bpm is not none %}
+                      <span style="font-size: 11px; color: {{ '#2DD4BF' if sp.next_night_rhr_delta_bpm <= 0.8 else '#FB923C' }};">
+                        ({{ '+' if sp.next_night_rhr_delta_bpm > 0 else '' }}{{ sp.next_night_rhr_delta_bpm }} bpm)
+                      </span>
+                    {% endif %}
+                  {% else %}—{% endif %}
+                </td>
+                <td>
+                  {% if sp.next_night_bb_charged is not none %}+{{ sp.next_night_bb_charged|int }} BB{% else %}—{% endif %}
+                  {% if sp.next_night_deep_pct is not none %} · {{ sp.next_night_deep_pct }}% N3{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="state-box">Dati insufficienti per confrontare le discipline.</div>
+    {% endif %}
+  </article>
+</section>
+
+<!-- Idea 6: Simulatore Deterministico "Cosa succede se..." (Prossimi 7 Giorni) -->
+<h2 class="section-title">🔮 Simulatore "Cosa succede se..." — Previsione a 7 Giorni (Fatica ATL, Fitness CTL, Forma TSB e ACWR)</h2>
+<section class="card" id="whatif-simulator" style="margin-bottom: var(--space-6);">
+  <div class="card-header">
+    <div>
+      <span class="card-label" style="color: var(--color-recovery);">Pianificatore Deterministico del Carico Settimanale (Modello di Banister)</span>
+      <div class="card-subtitle">
+        Imposta i carichi TRIMP previsti per i prossimi 7 giorni (usando i pulsanti rapidi tarati sulle tue medie reali o i cursori) per vedere come evolveranno la tua freschezza atletica (TSB) e il rapporto ACWR.
+      </div>
+    </div>
+    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+      <button type="button" class="btn-pill whatif-week-preset" data-pattern="typical">📅 Settimana Tipica (3 Tennis + 2 Pesi)</button>
+      <button type="button" class="btn-pill whatif-week-preset" data-pattern="taper">🟢 Scarico Pre-Torneo</button>
+      <button type="button" class="btn-pill whatif-week-preset" data-pattern="overload">🔥 Blocco Intenso</button>
+      <button type="button" class="btn-pill whatif-week-preset" data-pattern="rest">🛌 Tutto Riposo</button>
+    </div>
+  </div>
+
+  <!-- Griglia dei 7 giorni futuri -->
+  <div class="whatif-days-grid">
+    {% for sd in sim_days %}
+      <div class="whatif-day-box">
+        <div class="whatif-day-label">{{ sd.label }}</div>
+        <div class="whatif-presets-row">
+          <button type="button" class="whatif-chip" data-day-idx="{{ loop.index0 }}" data-trimp="0" title="Riposo (0 TRIMP)">🛌 0</button>
+          <button type="button" class="whatif-chip" data-day-idx="{{ loop.index0 }}" data-trimp="35" title="Sessione Pesi (~35 TRIMP)">🏋️ 35</button>
+          <button type="button" class="whatif-chip" data-day-idx="{{ loop.index0 }}" data-trimp="80" title="Corsa (~80 TRIMP)">🏃 80</button>
+          <button type="button" class="whatif-chip" data-day-idx="{{ loop.index0 }}" data-trimp="110" title="Match/Allenamento Tennis (~110 TRIMP)">🎾 110</button>
+        </div>
+        <input
+          type="range"
+          min="0"
+          max="220"
+          step="5"
+          value="{{ sd.default_load|int }}"
+          class="whatif-slider"
+          data-day-idx="{{ loop.index0 }}"
+          data-day-iso="{{ sd.day }}"
+          aria-label="TRIMP previsto per {{ sd.label }}"
+        >
+        <div class="whatif-val-display">
+          <strong id="whatif-val-{{ loop.index0 }}">{{ sd.default_load|int }}</strong> <span>TRIMP</span>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <!-- Riepilogo KPI simulati a fine settimana (+7 giorni) -->
+  <div class="drawer-kpi-grid" style="grid-template-columns: repeat(5, minmax(0, 1fr)); margin: var(--space-4) 0;">
+    <div class="drawer-kpi-box">
+      <span class="drawer-kpi-label">Carico Totale 7g Previsto</span>
+      <span class="drawer-kpi-val" id="sim-total-load">— TRIMP</span>
+    </div>
+    <div class="drawer-kpi-box">
+      <span class="drawer-kpi-label">Fatica Prevista (ATL +7g)</span>
+      <span class="drawer-kpi-val" id="sim-end-atl" style="color: var(--color-strain);">—</span>
+    </div>
+    <div class="drawer-kpi-box">
+      <span class="drawer-kpi-label">Fitness Prevista (CTL +7g)</span>
+      <span class="drawer-kpi-val" id="sim-end-ctl" style="color: var(--color-recovery);">—</span>
+    </div>
+    <div class="drawer-kpi-box" id="sim-tsb-box">
+      <span class="drawer-kpi-label">Forma Prevista (TSB +7g)</span>
+      <span class="drawer-kpi-val" id="sim-end-tsb">—</span>
+    </div>
+    <div class="drawer-kpi-box" id="sim-acwr-box">
+      <span class="drawer-kpi-label">Picco ACWR / Monotonia</span>
+      <span class="drawer-kpi-val" id="sim-end-acwr">—</span>
+    </div>
+  </div>
+
+  <div id="activities-whatif-chart" class="chart-box"></div>
 </section>
 
 <!-- Formule matematiche delle analisi attività -->
@@ -295,6 +486,189 @@
         effLayout,
         { displayModeBar: false, responsive: true }
       );
+    }
+
+    // Grafico Idea 3: Monotonia e Strain di Foster (ultimi 60 giorni)
+    var fosterSeries = {{ (foster_stats.value.series[-60:] if foster_stats and foster_stats.calculable else []) | tojson }};
+    if (fosterSeries.length > 0 && typeof Plotly !== "undefined") {
+      var fx = fosterSeries.map(function (d) { return d.day; });
+      var fMon = fosterSeries.map(function (d) { return d.monotony_7d; });
+      var fStr = fosterSeries.map(function (d) { return d.foster_strain_7d; });
+      var fThresh = fosterSeries.map(function () { return 2.0; });
+      var fLayout = window.GarminDashboardUI.basePlotlyLayout("Monotonia");
+      fLayout.margin.r = 52;
+      fLayout.yaxis2 = {
+        title: { text: "Foster Strain", font: { size: 11, color: "#FB923C" } },
+        overlaying: "y",
+        side: "right",
+        showgrid: false
+      };
+      Plotly.newPlot(
+        "activities-foster-chart",
+        [
+          { x: fx, y: fStr, yaxis: "y2", type: "bar", name: "Foster Strain (7g)", marker: { color: "rgba(251,146,60,0.30)" } },
+          { x: fx, y: fMon, type: "scatter", mode: "lines+markers", name: "Monotonia (7g)", line: { color: "#2DD4BF", width: 2.3 }, marker: { size: 4 } },
+          { x: fx, y: fThresh, type: "scatter", mode: "lines", name: "Soglia Critica (2.0)", line: { color: "#F87171", width: 1.5, dash: "dash" } }
+        ],
+        fLayout,
+        { displayModeBar: false, responsive: true }
+      );
+    }
+
+    // Grafico Idea 4: Profilo Multi-Sport (Tennis vs Pesi vs Corsa)
+    var msSports = {{ (multisport_stats.value.sports if multisport_stats and multisport_stats.calculable else []) | tojson }};
+    if (msSports.length > 0 && typeof Plotly !== "undefined") {
+      var sx = msSports.map(function (s) { return s.label; });
+      var msLayout = window.GarminDashboardUI.basePlotlyLayout("Valore / %");
+      msLayout.barmode = "group";
+      Plotly.newPlot(
+        "activities-multisport-chart",
+        [
+          { x: sx, y: msSports.map(function (s) { return s.trimp_per_min; }), type: "bar", name: "Densità (TRIMP/min)", marker: { color: "#FB923C" } },
+          { x: sx, y: msSports.map(function (s) { return s.high_z4_z5_pct; }), type: "bar", name: "Alta Intensità Z4+Z5 (%)", marker: { color: "#818CF8" } },
+          { x: sx, y: msSports.map(function (s) { return s.next_night_hrv_delta_ms !== null ? s.next_night_hrv_delta_ms : 0; }), type: "bar", name: "ΔHRV Notte Dopo (ms)", marker: { color: "#2DD4BF" } }
+        ],
+        msLayout,
+        { displayModeBar: false, responsive: true }
+      );
+    }
+
+    // Idea 6: Simulatore Interattivo "Cosa succede se..." (7 giorni)
+    var sliders = Array.prototype.slice.call(document.querySelectorAll(".whatif-slider"));
+    if (sliders.length > 0 && loadSeries.length > 0 && typeof Plotly !== "undefined") {
+      var recentHist = loadSeries.slice(-21);
+      var lastPoint = recentHist[recentHist.length - 1];
+      var atl0 = lastPoint ? Number(lastPoint.atl_7d) : 35.0;
+      var ctl0 = lastPoint ? Number(lastPoint.ctl_28d) : 35.0;
+      var alphaA = 2.0 / (7.0 + 1.0);
+      var alphaC = 2.0 / (28.0 + 1.0);
+
+      function updateWhatIfSimulation() {
+        var plannedLoads = sliders.map(function (sl, idx) {
+          var v = Number(sl.value || 0);
+          var lbl = document.getElementById("whatif-val-" + idx);
+          if (lbl) lbl.textContent = String(v);
+          return v;
+        });
+
+        var atl = atl0;
+        var ctl = ctl0;
+        var forecastDays = [];
+        var fAtl = [];
+        var fCtl = [];
+        var fTsb = [];
+        var peakAcwr = 0.0;
+
+        // Punto di giunzione col presente (così la linea tratteggiata parte dall'ultimo giorno reale)
+        if (lastPoint) {
+          forecastDays.push(lastPoint.day);
+          fAtl.push(atl0);
+          fCtl.push(ctl0);
+          fTsb.push(Number((ctl0 - atl0).toFixed(1)));
+        }
+
+        sliders.forEach(function (sl, idx) {
+          var lVal = plannedLoads[idx];
+          var dIso = sl.getAttribute("data-day-iso");
+          atl = alphaA * lVal + (1.0 - alphaA) * atl;
+          ctl = alphaC * lVal + (1.0 - alphaC) * ctl;
+          var tsb = ctl - atl;
+          var acwr = ctl >= 5.0 ? atl / ctl : 0.0;
+          if (acwr > peakAcwr) peakAcwr = acwr;
+
+          forecastDays.push(dIso);
+          fAtl.push(Number(atl.toFixed(1)));
+          fCtl.push(Number(ctl.toFixed(1)));
+          fTsb.push(Number(tsb.toFixed(1)));
+        });
+
+        var tot7 = plannedLoads.reduce(function (a, b) { return a + b; }, 0);
+        var mean7 = tot7 / 7.0;
+        var variance7 = plannedLoads.reduce(function (acc, x) { return acc + Math.pow(x - mean7, 2); }, 0) / 6.0;
+        var sd7 = Math.sqrt(variance7);
+        var mon7 = tot7 <= 0.1 ? 0.0 : (sd7 < 1.0 ? 4.0 : Math.min(4.0, mean7 / sd7));
+
+        var endAtl = fAtl[fAtl.length - 1];
+        var endCtl = fCtl[fCtl.length - 1];
+        var endTsb = fTsb[fTsb.length - 1];
+
+        var elTot = document.getElementById("sim-total-load");
+        var elAtl = document.getElementById("sim-end-atl");
+        var elCtl = document.getElementById("sim-end-ctl");
+        var elTsb = document.getElementById("sim-end-tsb");
+        var elAcwr = document.getElementById("sim-end-acwr");
+        var boxTsb = document.getElementById("sim-tsb-box");
+        var boxAcwr = document.getElementById("sim-acwr-box");
+
+        if (elTot) elTot.textContent = tot7.toFixed(0) + " TRIMP";
+        if (elAtl) elAtl.textContent = endAtl.toFixed(1) + " TRIMP/g";
+        if (elCtl) elCtl.textContent = endCtl.toFixed(1) + " TRIMP/g";
+        if (elTsb) {
+          elTsb.textContent = (endTsb > 0 ? "+" : "") + endTsb.toFixed(1) + " pt (" + (endTsb >= 3 ? "Fresco" : (endTsb >= -12 ? "Allenante" : "Affaticato")) + ")";
+        }
+        if (boxTsb) {
+          boxTsb.className = "drawer-kpi-box " + (endTsb >= 3 ? "status-improving" : (endTsb >= -15 ? "status-in_line" : "status-worsening"));
+        }
+        if (elAcwr) {
+          elAcwr.textContent = peakAcwr.toFixed(2) + " · Mon. " + mon7.toFixed(2);
+        }
+        if (boxAcwr) {
+          boxAcwr.className = "drawer-kpi-box " + (peakAcwr <= 1.30 && mon7 < 1.8 ? "status-improving" : (peakAcwr <= 1.50 ? "status-in_line" : "status-worsening"));
+        }
+
+        var hx = recentHist.map(function (d) { return d.day; });
+        var hAtl = recentHist.map(function (d) { return d.atl_7d; });
+        var hCtl = recentHist.map(function (d) { return d.ctl_28d; });
+        var hTsb = recentHist.map(function (d) { return d.tsb_form; });
+
+        var simLayout = window.GarminDashboardUI.basePlotlyLayout("TRIMP/g");
+        Plotly.react(
+          "activities-whatif-chart",
+          [
+            { x: hx, y: hAtl, type: "scatter", mode: "lines", name: "ATL Storico (7g)", line: { color: "#FB923C", width: 2.2 } },
+            { x: hx, y: hCtl, type: "scatter", mode: "lines", name: "CTL Storico (28g)", line: { color: "#2DD4BF", width: 2.2 } },
+            { x: hx, y: hTsb, type: "bar", name: "TSB Storico", marker: { color: "rgba(148,163,184,0.22)" } },
+            { x: forecastDays, y: fAtl, type: "scatter", mode: "lines+markers", name: "ATL Previsto (+7g)", line: { color: "#FB923C", width: 2.4, dash: "dot" }, marker: { size: 6 } },
+            { x: forecastDays, y: fCtl, type: "scatter", mode: "lines+markers", name: "CTL Previsto (+7g)", line: { color: "#2DD4BF", width: 2.4, dash: "dot" }, marker: { size: 6 } },
+            { x: forecastDays.slice(1), y: fTsb.slice(1), type: "bar", name: "TSB Previsto (Forma)", marker: { color: "rgba(129,140,248,0.40)" } }
+          ],
+          simLayout,
+          { displayModeBar: false, responsive: true }
+        );
+      }
+
+      sliders.forEach(function (sl) {
+        sl.addEventListener("input", updateWhatIfSimulation);
+      });
+
+      document.querySelectorAll(".whatif-chip").forEach(function (chip) {
+        chip.addEventListener("click", function () {
+          var idx = Number(chip.getAttribute("data-day-idx"));
+          var val = Number(chip.getAttribute("data-trimp"));
+          if (sliders[idx]) {
+            sliders[idx].value = String(val);
+            updateWhatIfSimulation();
+          }
+        });
+      });
+
+      var patterns = {
+        typical: [0, 35, 110, 0, 35, 110, 110],
+        taper: [35, 80, 0, 35, 0, 0, 110],
+        overload: [80, 110, 35, 110, 80, 110, 0],
+        rest: [0, 0, 0, 0, 0, 0, 0]
+      };
+      document.querySelectorAll(".whatif-week-preset").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var pat = patterns[btn.getAttribute("data-pattern")] || patterns.typical;
+          sliders.forEach(function (sl, i) {
+            sl.value = String(pat[i] !== undefined ? pat[i] : 0);
+          });
+          updateWhatIfSimulation();
+        });
+      });
+
+      updateWhatIfSimulation();
     }
   });
 </script>

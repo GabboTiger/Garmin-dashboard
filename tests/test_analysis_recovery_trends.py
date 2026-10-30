@@ -76,3 +76,22 @@ def test_training_to_recovery_bootstrap_recovers_synthetic_hrv_drop() -> None:
     rhr_eff = val["rhr_next_night"]
     assert rhr_eff["diff_hard_vs_non_hard_bpm"] > 1.0
     assert rhr_eff["ci95_low_bpm"] > 0.0
+
+
+def test_multisport_comparison_profiles() -> None:
+    """Verifica il profilo fisiologico Multi-Sport (Idea 4) su più discipline."""
+    daily_rows, activities = synthetic.generate_synthetic_dataset(
+        days=60,
+        end_date=date(2026, 10, 30),
+        seed=42,
+    )
+    res = recovery_trends.compute_multisport_comparison(daily_rows, activities)
+    assert res["calculable"] is True
+    sports = res["value"]["sports"]
+    assert len(sports) >= 2
+    for sp in sports:
+        assert sp["sessions_count"] >= 1
+        assert sp["trimp_per_min"] >= 0.0
+        assert sp["next_night_hrv_ms"] is not None
+
+

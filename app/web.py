@@ -362,6 +362,40 @@ METRIC_GUIDE: dict[str, dict[str, str]] = {
             "1.0–1.9 Recupero/Beneficio minimo; 2.0–2.9 Mantenimento; 3.0–3.9 Miglioramento; 4.0–4.9 Miglioramento elevato; 5.0 Sovraccarico."
         ),
     },
+    "Monotonia di Foster (7g)": {
+        "area": "Attività & Carico",
+        "short": "Rapporto tra carico medio e deviazione standard sui 7 giorni: < 1.5 indica ottima alternanza duro/facile; > 2.0 carico troppo uniforme.",
+        "meaning": (
+            "L'Indice di Monotonia di Carl Foster (Media TRIMP 7g ÷ SD TRIMP 7g) misura quanto variano i tuoi carichi da un giorno all'altro. "
+            "Fisiologicamente l'adattamento richiede polarizzazione (giorni di spinta alternati a giorni di riposo o carico leggero): "
+            "Monotonia < 1.5 = ottima modulazione; 1.5–2.0 = moderata; > 2.0 = carico piatto senza veri giorni di scarico."
+        ),
+    },
+    "Strain di Foster (7g)": {
+        "area": "Attività & Carico",
+        "short": "Prodotto tra Carico Settimanale (TRIMP 7g) e Monotonia: penalizza le settimane ad alto volume prive di giorni di recupero.",
+        "meaning": (
+            "Lo Strain Settimanale di Foster (Load 7g × Monotonia) amplifica il carico settimanale quando manca l'alternanza tra giorni duri e giorni di recupero. "
+            "È uno degli indicatori più sensibili in letteratura per prevenire l'affaticamento del sistema nervoso autonomo e i cali prolungati di HRV."
+        ),
+    },
+    "Profilo Multi-Sport (Tennis vs Pesi vs Corsa)": {
+        "area": "Attività & Carico",
+        "short": "Confronta il costo cardiovascolare al minuto (TRIMP/min) e la risposta di HRV e FC a riposo la mattina dopo ciascuno dei tuoi sport.",
+        "meaning": (
+            "Ogni disciplina sollecita il corpo in modo diverso: i Pesi hanno bassa densità cardiovascolare (TRIMP/min ~0.4–0.6, 99% in Z1–Z2) ma carico neuromuscolare; "
+            "il Tennis ha densità ~3 volte superiore (~1.5–1.7 TRIMP/min con ~25% in Z4–Z5 per via degli scatti); la Corsa ha la massima densità aerobica continua (~1.9–2.1 TRIMP/min). "
+            "Confrontare ΔHRV e ΔRHR a t+1 mostra come il tuo sistema nervoso recupera dopo ciascuno sport."
+        ),
+    },
+    "Simulatore What-If (7g)": {
+        "area": "Attività & Carico",
+        "short": "Proiezione deterministica a 7 giorni di Fatica (ATL), Fitness (CTL), Forma (TSB) e ACWR in base agli allenamenti che pianifichi.",
+        "meaning": (
+            "Usa le equazioni ricorsive esponenziali di Banister partendo dal tuo stato attuale (ATL_0, CTL_0) per mostrare in anticipo "
+            "come evolveranno la freschezza atletica (TSB) e il rapporto ACWR nei prossimi 7 giorni scegliendo tra Riposo, Pesi, Tennis o Corsa."
+        ),
+    },
     "Baseline Mediana 30g & Z-score Robusto": {
         "area": "Statistica & Trend",
         "short": "Confronta il dato di oggi con la tua mediana degli ultimi 30 giorni usando lo scostamento mediano assoluto (MAD), immune ai valori anomali.",
@@ -952,6 +986,7 @@ def create_app(db_path: Path | str | None = None, demo_mode: bool | None = None)
             target_day=target_day,
         ) if latest else None
         train_effect = analysis.compute_training_to_recovery_effect(daily_rows, activities) if latest else None
+        multisport_stats = analysis.compute_multisport_comparison(daily_rows, activities) if latest else None
         history_30d = _build_window_history(daily_rows, activities, target_day, window_days=30) if latest else []
 
         return render_template(
@@ -969,6 +1004,7 @@ def create_app(db_path: Path | str | None = None, demo_mode: bool | None = None)
             bb_recharge=bb_recharge,
             rhr_trend=rhr_trend,
             train_effect=train_effect,
+            multisport_stats=multisport_stats,
             history_30d=history_30d,
         )
 
@@ -984,8 +1020,27 @@ def create_app(db_path: Path | str | None = None, demo_mode: bool | None = None)
 
         day_scores = scores.compute_all_scores_for_day(daily_rows, activities, target_day) if latest else {}
         load_stats = analysis.compute_acute_chronic_load(daily_rows, activities, target_day=target_day) if latest else None
+        foster_stats = analysis.compute_foster_monotony_strain(daily_rows, activities, target_day=target_day) if latest else None
+        multisport_stats = analysis.compute_multisport_comparison(daily_rows, activities) if latest else None
         weekly_zones = analysis.compute_weekly_zone_distribution(activities, end_day=target_day, window_days=7) if latest else None
         weekly_summary = _build_weekly_activity_summary(activities, target_day, n_weeks=8) if latest else []
+
+        # Giorni futuri (d+1 .. d+7) e preset sportivi per il simulatore What-If
+        weekday_names_it = ("Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom")
+        sim_days: list[dict[str, Any]] = []
+        default_loads = [0.0, 35.0, 0.0, 110.0, 35.0, 0.0, 110.0]
+        if target_day:
+            base_dt = date.fromisoformat(target_day)
+            for idx in range(7):
+                f_dt = base_dt + timedelta(days=idx + 1)
+                sim_days.append(
+                    {
+                        "offset": idx + 1,
+                        "day": f_dt.isoformat(),
+                        "label": f"{weekday_names_it[f_dt.weekday()]} {f_dt.strftime('%d/%m')}",
+                        "default_load": default_loads[idx],
+                    }
+                )
 
         return render_template(
             "activities.html",
@@ -998,6 +1053,9 @@ def create_app(db_path: Path | str | None = None, demo_mode: bool | None = None)
             latest=latest,
             scores=day_scores,
             load_stats=load_stats,
+            foster_stats=foster_stats,
+            multisport_stats=multisport_stats,
+            sim_days=sim_days,
             weekly_zones=weekly_zones,
             weekly_summary=weekly_summary,
             activities=enriched_acts,

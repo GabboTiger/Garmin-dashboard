@@ -734,3 +734,233 @@ def compute_speed_hr_efficiency(activity_row: dict[str, Any]) -> dict[str, Any]:
         extra={"speed_m_per_min": round(speed_m_per_min, 1)},
     )
 
+
+def compute_foster_monotony_strain(
+    daily_rows: list[dict[str, Any]],
+    activities_rows: list[dict[str, Any]],
+    target_day: str | None = None,
+    config: AnalysisConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Calcola l'Indice di Monotonia e lo Strain settimanale secondo il modello di Carl Foster (1998)
+    applicato ai carichi giornalieri TRIMP su finestre mobili di 7 giorni.
+
+    Formula:
+      Siano L_1, ..., L_7 i carichi giornalieri (TRIMP) negli ultimi 7 giorni fino a t:
+        Load_7d      = sum_{i=1..7} L_i
+        Mean_7d      = Load_7d / 7
+        SD_7d        = sqrt( (1 / 6) * sum_{i=1..7} (L_i - Mean_7d)^2 )
+        Monotony_7d  = Mean_7d / SD_7d   (plafonato a 4.0 se SD_7d < 1.0 e Mean_7d > 0; 0.0 se Load_7d == 0)
+        FosterStrain = Load_7d * Monotony_7d
+
+    Parametri:
+      - Finestra: 7 giorni mobili
+      - Soglie Monotonia: < 1.5 ben modulato; 1.5–2.0 moderato; > 2.0 alta monotonia (rischio sovrallenamento se Strain alto)
+
+    Dati minimi e limiti:
+      - Richiede almeno 7 giorni di calendario fino a `target_day`.
+    """
+    hw = {
+        "title": "Indice di Monotonia e Strain Settimanale di Foster (7 giorni)",
+        "formula_latex": (
+            r"\text{Load}_{7g} = \sum_{i=1}^{7} L_i, \quad "
+            r"\text{Monotonia} = \frac{\overline{L}_{7g}}{s_{L,7g}}, \quad "
+            r"\text{Strain} = \text{Load}_{7g} \times \text{Monotonia}"
+        ),
+        "parameters": {
+            "Finestra mobile": "7 giorni",
+            "Soglia attenzione Monotonia": "> 2.0 (carico poco variato)",
+            "Soglia ottimale": "< 1.5 (buona alternanza carico/scarico)",
+        },
+        "limits": (
+            "Un'alta monotonia con carico settimanale basso (es. 7 passeggiate leggere uguali) non è rischiosa; "
+            "diventa critica solo quando combinata con un alto carico totale (Foster Strain elevato)."
+        ),
+    }
+
+    if not daily_rows:
+        return make_not_calculable(unit="indice", reason="Nessun giorno in archivio.", how_it_works=hw)
+
+    ordered_days = sorted(str(r["day"]) for r in daily_rows if r.get("day"))
+    if target_day is None:
+        target_day = ordered_days[-1]
+
+    end_dt = date.fromisoformat(target_day)
+    first_dt = date.fromisoformat(ordered_days[0])
+    total_span = (end_dt - first_dt).days + 1
+    if total_span < 7:
+        return make_not_calculable(
+            unit="indice",
+            reason=f"Servono almeno 7 giorni di storico (presenti {total_span}).",
+            n_samples=total_span,
+            how_it_works=hw,
+        )
+
+    rhr_by_day = {str(r["day"]): r.get("rhr_bpm") for r in daily_rows if r.get("day")}
+    # Costruisce una griglia calendario continua da max(first_dt, end_dt - 59) a end_dt
+    grid_start = max(first_dt, end_dt - timedelta(days=59))
+    n_grid = (end_dt - grid_start).days + 1
+    cal_days = [(grid_start + timedelta(days=i)).isoformat() for i in range(n_grid)]
+    load_by_day: dict[str, float] = {d: 0.0 for d in cal_days}
+
+    for act in activities_rows:
+        d = str(act.get("day") or "")
+        if d not in load_by_day:
+            continue
+        t_res = compute_trimp(act, hr_rest=rhr_by_day.get(d), config=config)
+        if t_res["calculable"] and t_res["value"] is not None:
+            load_by_day[d] += float(t_res["value"])
+        elif act.get("training_load") is not None:
+            load_by_day[d] += float(act["training_load"])
+
+    series: list[dict[str, Any]] = []
+    for idx in range(6, len(cal_days)):
+        win_days = cal_days[idx - 6 : idx + 1]
+        vals = np.asarray([load_by_day[d] for d in win_days], dtype=float)
+        w_load = float(np.sum(vals))
+        w_mean = float(np.mean(vals))
+        w_sd = float(np.std(vals, ddof=1))
+        if w_load <= 0.1:
+            monotony = 0.0
+        elif w_sd < 1.0:
+            monotony = 4.0
+        else:
+            monotony = min(4.0, w_mean / w_sd)
+        f_strain = w_load * monotony
+        active_days = int(np.sum(vals > 1.0))
+        series.append(
+            {
+                "day": cal_days[idx],
+                "weekly_load_7d": round(w_load, 1),
+                "mean_daily_load_7d": round(w_mean, 1),
+                "sd_daily_load_7d": round(w_sd, 1),
+                "monotony_7d": round(monotony, 2),
+                "foster_strain_7d": round(f_strain, 1),
+                "active_days_7d": active_days,
+            }
+        )
+
+    latest = series[-1]
+    m_val = latest["monotony_7d"]
+    if latest["weekly_load_7d"] <= 1.0:
+        status_label = "Settimana di scarico / riposo"
+    elif m_val < 1.5:
+        status_label = "Ben modulato (< 1.5 · ottima alternanza)"
+    elif m_val <= 2.0:
+        status_label = "Moderato (1.5–2.0)"
+    else:
+        status_label = "Alta monotonia (> 2.0 · inserire scarico)"
+
+    return make_result(
+        value={
+            "day": latest["day"],
+            "monotony_7d": latest["monotony_7d"],
+            "foster_strain_7d": latest["foster_strain_7d"],
+            "weekly_load_7d": latest["weekly_load_7d"],
+            "mean_daily_load_7d": latest["mean_daily_load_7d"],
+            "sd_daily_load_7d": latest["sd_daily_load_7d"],
+            "active_days_7d": latest["active_days_7d"],
+            "status_label": status_label,
+            "series": series,
+        },
+        unit="indice",
+        n_samples=7,
+        quality_flag="good",
+        assumptions=[
+            f"Calcolato sui 7 giorni fino a {target_day} ({latest['active_days_7d']}/7 giorni con attività registrata).",
+        ],
+        how_it_works=hw,
+    )
+
+
+def simulate_future_load(
+    atl_0: float,
+    ctl_0: float,
+    planned_loads: list[float],
+    start_day: str,
+    recent_6d_loads: list[float] | None = None,
+    config: AnalysisConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Simula deterministica a N giorni (default 7) dell'evoluzione di Fatica (ATL 7g), Fitness (CTL 28g),
+    Bilancio (TSB) e Rapporto ACWR a partire dallo stato corrente `(atl_0, ctl_0)` e dai carichi
+    giornalieri pianificati `planned_loads` (in TRIMP).
+
+    Formula:
+      ATL_k = alpha_7 * L_k + (1 - alpha_7) * ATL_{k-1}
+      CTL_k = alpha_28 * L_k + (1 - alpha_28) * CTL_{k-1}
+      TSB_k = CTL_k - ATL_k
+      ACWR_k = ATL_k / CTL_k
+    """
+    hw = {
+        "title": "Simulatore Deterministico Carico Futuro (What-If 7 Giorni)",
+        "formula_latex": (
+            r"\hat{\text{ATL}}_k = \alpha_7 \hat{L}_k + (1-\alpha_7)\hat{\text{ATL}}_{k-1}, \quad "
+            r"\hat{\text{CTL}}_k = \alpha_{28} \hat{L}_k + (1-\alpha_{28})\hat{\text{CTL}}_{k-1}, \quad "
+            r"\hat{\text{TSB}}_k = \hat{\text{CTL}}_k - \hat{\text{ATL}}_k"
+        ),
+        "parameters": {
+            "Orizzonte simulazione": f"{len(planned_loads)} giorni",
+            "Stato iniziale (ATL_0 / CTL_0)": f"{atl_0:.1f} / {ctl_0:.1f} TRIMP/g",
+        },
+        "limits": "Modello deterministico di Banister: assume che a parità di TRIMP la risposta fisiologica sia stazionaria.",
+    }
+
+    alpha_a = 2.0 / (config.atl_tau_days + 1.0)
+    alpha_c = 2.0 / (config.ctl_tau_days + 1.0)
+    base_dt = date.fromisoformat(start_day)
+
+    atl = float(atl_0)
+    ctl = float(ctl_0)
+    forecast: list[dict[str, Any]] = []
+    clean_loads = [max(0.0, float(x)) for x in planned_loads]
+
+    for idx, load_val in enumerate(clean_loads, start=1):
+        d_str = (base_dt + timedelta(days=idx)).isoformat()
+        atl = alpha_a * load_val + (1.0 - alpha_a) * atl
+        ctl = alpha_c * load_val + (1.0 - alpha_c) * ctl
+        tsb = ctl - atl
+        acwr = round(atl / ctl, 2) if ctl >= 5.0 else None
+        forecast.append(
+            {
+                "day": d_str,
+                "planned_load": round(load_val, 1),
+                "atl_7d": round(atl, 1),
+                "ctl_28d": round(ctl, 1),
+                "tsb_form": round(tsb, 1),
+                "acwr": acwr,
+            }
+        )
+
+    # Monotonia della settimana simulata
+    if len(clean_loads) >= 7:
+        w_vals = np.asarray(clean_loads[-7:], dtype=float)
+    else:
+        pad = (recent_6d_loads or [])[-(7 - len(clean_loads)) :]
+        w_vals = np.asarray(list(pad) + clean_loads, dtype=float)
+
+    w_sum = float(np.sum(w_vals))
+    w_mean = float(np.mean(w_vals)) if len(w_vals) > 0 else 0.0
+    w_sd = float(np.std(w_vals, ddof=1)) if len(w_vals) > 1 else 0.0
+    sim_monotony = 0.0 if w_sum <= 0.1 else (4.0 if w_sd < 1.0 else min(4.0, w_mean / w_sd))
+
+    end_state = forecast[-1] if forecast else {"atl_7d": round(atl, 1), "ctl_28d": round(ctl, 1), "tsb_form": round(ctl - atl, 1), "acwr": None}
+    peak_acwr = max((f["acwr"] for f in forecast if f["acwr"] is not None), default=end_state["acwr"])
+
+    return make_result(
+        value={
+            "forecast": forecast,
+            "end_atl_7d": end_state["atl_7d"],
+            "end_ctl_28d": end_state["ctl_28d"],
+            "end_tsb_form": end_state["tsb_form"],
+            "end_acwr": end_state["acwr"],
+            "peak_acwr": peak_acwr,
+            "simulated_weekly_load": round(w_sum, 1),
+            "simulated_monotony": round(sim_monotony, 2),
+        },
+        unit="TRIMP/g",
+        n_samples=len(clean_loads),
+        quality_flag="good",
+        assumptions=[f"Proiezione deterministica su {len(clean_loads)} giorni da {start_day}."],
+        how_it_works=hw,
+    )
+
+

@@ -615,3 +615,206 @@ def compute_training_to_recovery_effect(
         ],
         how_it_works=hw,
     )
+
+
+SPORT_GROUP_META: dict[str, dict[str, str]] = {
+    "tennis": {"label": "🎾 Tennis", "color": "#FB923C"},
+    "strength_training": {"label": "🏋️ Pesi / Forza", "color": "#818CF8"},
+    "running": {"label": "🏃 Corsa", "color": "#2DD4BF"},
+    "cycling": {"label": "🚴 Ciclismo", "color": "#38BDF8"},
+    "swimming": {"label": "🏊 Nuoto", "color": "#60A5FA"},
+    "walking": {"label": "🚶 Camminata", "color": "#A3E635"},
+}
+
+
+def _normalize_sport_key(raw_type: str | None) -> str:
+    t = str(raw_type or "other").lower().strip()
+    if t in ("tennis_v2", "tennis"):
+        return "tennis"
+    return t
+
+
+def compute_multisport_comparison(
+    daily_rows: list[dict[str, Any]],
+    activities_rows: list[dict[str, Any]],
+    config: AnalysisConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Confronta il profilo fisiologico e il costo di recupero della notte successiva (t+1)
+    tra le diverse discipline praticate (es. Tennis vs Pesi vs Corsa).
+
+    Formula:
+      Per ogni disciplina S con n_S >= 1 sedute:
+        - Densità TRIMP = sum(TRIMP_i) / sum(Durata_min_i)   [TRIMP / min]
+        - Quota Z4+Z5 (%) = sum(t_{Z4,i} + t_{Z5,i}) / sum(t_{Z1..Z5,i}) * 100
+        - Delta HRV_{t+1} = Media(HRV_{d+1 | d in S}) - Media(HRV_{d+1 | d riposo})   [ms]
+        - Delta RHR_{t+1} = Media(RHR_{d+1 | d in S}) - Media(RHR_{d+1 | d riposo})   [bpm]
+
+    Dati minimi e limiti:
+      - Richiede almeno 1 attività registrata e la tabella giornaliera per associare la notte successiva.
+      - Se in uno stesso giorno vengono svolte due discipline diverse, la notte successiva riflette il carico combinato.
+    """
+    hw = {
+        "title": "Profilo Fisiologico Multi-Sport (Tennis vs Pesi vs Corsa) e Risposta a t+1",
+        "formula_latex": (
+            r"\text{Densità}_S = \frac{\sum_{i \in S}\text{TRIMP}_i}{\sum_{i \in S} T_i\;[\text{min}]}, \quad "
+            r"\Delta\text{HRV}_{S,t+1} = \overline{\text{HRV}}_{t+1 \mid S} - \overline{\text{HRV}}_{t+1 \mid \text{riposo}}"
+        ),
+        "parameters": {
+            "Finestra risposta": "Notte successiva (lag +1 giorno)",
+            "Riferimento baseline": "Notti successive ai giorni senza attività registrate",
+        },
+        "limits": "Confronto osservazionale: l'orario della seduta (es. Tennis serale vs Corsa mattutina) influenza il recupero notturno.",
+    }
+
+    if not activities_rows:
+        return make_not_calculable(
+            unit="TRIMP/min",
+            reason="Nessuna attività presente in archivio per il confronto multi-sport.",
+            n_samples=0,
+            how_it_works=hw,
+        )
+
+    ordered_daily = sorted([r for r in daily_rows if r.get("day")], key=lambda r: str(r["day"]))
+    daily_by_day: dict[str, dict[str, Any]] = {str(r["day"]): r for r in ordered_daily}
+    rhr_by_day: dict[str, float | None] = {str(r["day"]): r.get("rhr_bpm") for r in ordered_daily}
+
+    # Individua i giorni con attività per calcolare il pool di riferimento "post-riposo"
+    active_days_set = {str(a.get("day")) for a in activities_rows if a.get("day")}
+    rest_next_hrv: list[float] = []
+    rest_next_rhr: list[float] = []
+
+    for i in range(len(ordered_daily) - 1):
+        d_cur = str(ordered_daily[i]["day"])
+        d_nxt = str(ordered_daily[i + 1]["day"])
+        if (date.fromisoformat(d_nxt) - date.fromisoformat(d_cur)).days != 1:
+            continue
+        if d_cur not in active_days_set:
+            nxt_row = ordered_daily[i + 1]
+            if nxt_row.get("hrv_night_ms") is not None:
+                rest_next_hrv.append(float(nxt_row["hrv_night_ms"]))
+            if nxt_row.get("rhr_bpm") is not None:
+                rest_next_rhr.append(float(nxt_row["rhr_bpm"]))
+
+    # Se non ci sono abbastanza giorni di riposo, usa la media globale come riferimento
+    ref_hrv = (
+        float(np.mean(rest_next_hrv))
+        if len(rest_next_hrv) >= 2
+        else float(np.mean([float(r["hrv_night_ms"]) for r in ordered_daily if r.get("hrv_night_ms") is not None] or [0.0]))
+    )
+    ref_rhr = (
+        float(np.mean(rest_next_rhr))
+        if len(rest_next_rhr) >= 2
+        else float(np.mean([float(r["rhr_bpm"]) for r in ordered_daily if r.get("rhr_bpm") is not None] or [0.0]))
+    )
+
+    by_sport: dict[str, list[dict[str, Any]]] = {}
+    for act in activities_rows:
+        s_key = _normalize_sport_key(act.get("type"))
+        by_sport.setdefault(s_key, []).append(act)
+
+    sports_summary: list[dict[str, Any]] = []
+    for s_key, acts in by_sport.items():
+        meta = SPORT_GROUP_META.get(
+            s_key,
+            {"label": f"⚡ {s_key.replace('_', ' ').title()}", "color": "#94A3B8"},
+        )
+        durs_min: list[float] = []
+        trimps: list[float] = []
+        hrs_avg: list[float] = []
+        hrs_max: list[float] = []
+        z_low_s = 0.0
+        z_mod_s = 0.0
+        z_high_s = 0.0
+        z_tot_s = 0.0
+
+        nxt_hrvs: list[float] = []
+        nxt_rhrs: list[float] = []
+        nxt_bb_chg: list[float] = []
+        nxt_deep_pct: list[float] = []
+
+        for a in acts:
+            d_str = str(a.get("day") or "")
+            dur_s = float(a.get("duration_s") or 0.0)
+            if dur_s > 0:
+                durs_min.append(dur_s / 60.0)
+            t_res = compute_trimp(a, hr_rest=rhr_by_day.get(d_str), config=config)
+            if t_res["calculable"] and t_res["value"] is not None:
+                trimps.append(float(t_res["value"]))
+            elif a.get("training_load") is not None:
+                trimps.append(float(a["training_load"]))
+
+            if a.get("hr_avg") is not None:
+                hrs_avg.append(float(a["hr_avg"]))
+            if a.get("hr_max") is not None:
+                hrs_max.append(float(a["hr_max"]))
+
+            zs = [float(a.get(f"z{k}_s") or 0.0) for k in range(1, 6)]
+            s_z = sum(zs)
+            if s_z > 0:
+                z_low_s += zs[0] + zs[1]
+                z_mod_s += zs[2]
+                z_high_s += zs[3] + zs[4]
+                z_tot_s += s_z
+
+            if d_str:
+                nxt_day_str = (date.fromisoformat(d_str) + timedelta(days=1)).isoformat()
+                nxt_r = daily_by_day.get(nxt_day_str)
+                if nxt_r:
+                    if nxt_r.get("hrv_night_ms") is not None:
+                        nxt_hrvs.append(float(nxt_r["hrv_night_ms"]))
+                    if nxt_r.get("rhr_bpm") is not None:
+                        nxt_rhrs.append(float(nxt_r["rhr_bpm"]))
+                    if nxt_r.get("bb_charged") is not None:
+                        nxt_bb_chg.append(float(nxt_r["bb_charged"]))
+                    tot_slp = float(nxt_r.get("sleep_total_min") or 0.0)
+                    deep_slp = float(nxt_r.get("sleep_deep_min") or 0.0)
+                    if tot_slp > 0 and deep_slp >= 0:
+                        nxt_deep_pct.append((deep_slp / tot_slp) * 100.0)
+
+        tot_dur_min = sum(durs_min)
+        tot_trimp = sum(trimps)
+        trimp_per_min = round(tot_trimp / tot_dur_min, 2) if tot_dur_min > 0 else 0.0
+        mean_hrv_nxt = round(float(np.mean(nxt_hrvs)), 1) if nxt_hrvs else None
+        mean_rhr_nxt = round(float(np.mean(nxt_rhrs)), 1) if nxt_rhrs else None
+
+        sports_summary.append(
+            {
+                "sport_key": s_key,
+                "label": meta["label"],
+                "color": meta["color"],
+                "sessions_count": len(acts),
+                "avg_duration_min": round(float(np.mean(durs_min)), 1) if durs_min else 0.0,
+                "avg_trimp": round(float(np.mean(trimps)), 1) if trimps else 0.0,
+                "trimp_per_min": trimp_per_min,
+                "avg_hr_bpm": round(float(np.mean(hrs_avg)), 0) if hrs_avg else None,
+                "max_hr_bpm": round(float(np.max(hrs_max)), 0) if hrs_max else None,
+                "low_z1_z2_pct": round((z_low_s / z_tot_s) * 100.0, 1) if z_tot_s > 0 else 0.0,
+                "mod_z3_pct": round((z_mod_s / z_tot_s) * 100.0, 1) if z_tot_s > 0 else 0.0,
+                "high_z4_z5_pct": round((z_high_s / z_tot_s) * 100.0, 1) if z_tot_s > 0 else 0.0,
+                "next_night_hrv_ms": mean_hrv_nxt,
+                "next_night_hrv_delta_ms": round(mean_hrv_nxt - ref_hrv, 1) if (mean_hrv_nxt is not None and ref_hrv > 0) else None,
+                "next_night_rhr_bpm": mean_rhr_nxt,
+                "next_night_rhr_delta_bpm": round(mean_rhr_nxt - ref_rhr, 1) if (mean_rhr_nxt is not None and ref_rhr > 0) else None,
+                "next_night_bb_charged": round(float(np.mean(nxt_bb_chg)), 1) if nxt_bb_chg else None,
+                "next_night_deep_pct": round(float(np.mean(nxt_deep_pct)), 1) if nxt_deep_pct else None,
+            }
+        )
+
+    sports_summary.sort(key=lambda x: x["sessions_count"], reverse=True)
+
+    return make_result(
+        value={
+            "sports": sports_summary,
+            "reference_rest_hrv_ms": round(ref_hrv, 1) if ref_hrv > 0 else None,
+            "reference_rest_rhr_bpm": round(ref_rhr, 1) if ref_rhr > 0 else None,
+        },
+        unit="TRIMP/min",
+        n_samples=len(activities_rows),
+        quality_flag="good" if len(sports_summary) >= 2 else "partial",
+        assumptions=[
+            f"Confronto su {len(activities_rows)} attività suddivise in {len(sports_summary)} discipline.",
+            f"Riferimento post-riposo: HRV = {ref_hrv:.1f} ms, RHR = {ref_rhr:.1f} bpm.",
+        ],
+        how_it_works=hw,
+    )
+

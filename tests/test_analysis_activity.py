@@ -131,3 +131,46 @@ def test_trimp_zones_ewma_and_efficiency() -> None:
     assert load_res["value"]["ctl_28d"] > 0
     assert len(load_res["value"]["series"]) == 90
 
+
+def test_foster_monotony_strain_and_whatif_simulator() -> None:
+    """Verifica il calcolo di Monotonia e Strain di Foster (Idea 3) e il simulatore What-If a 7 giorni (Idea 6)."""
+    daily_rows, activities = synthetic.generate_synthetic_dataset(
+        days=45,
+        end_date=date(2026, 10, 30),
+        seed=42,
+    )
+    foster = activity.compute_foster_monotony_strain(daily_rows, activities, target_day="2026-10-30")
+    assert foster["calculable"] is True
+    assert foster["value"]["monotony_7d"] >= 0.0
+    assert foster["value"]["foster_strain_7d"] >= 0.0
+    assert len(foster["value"]["series"]) >= 30
+
+    # Verifica caso non calcolabile (< 7 giorni)
+    foster_short = activity.compute_foster_monotony_strain(daily_rows[:4], activities, target_day=daily_rows[3]["day"])
+    assert foster_short["calculable"] is False
+
+    # Simulatore deterministico a 7 giorni: settimana di riposo totale deve far scendere ATL e salire TSB
+    sim_rest = activity.simulate_future_load(
+        atl_0=60.0,
+        ctl_0=50.0,
+        planned_loads=[0.0] * 7,
+        start_day="2026-10-30",
+    )
+    assert sim_rest["calculable"] is True
+    assert len(sim_rest["value"]["forecast"]) == 7
+    assert sim_rest["value"]["end_atl_7d"] < 60.0
+    assert sim_rest["value"]["end_tsb_form"] > (50.0 - 60.0)
+    assert sim_rest["value"]["simulated_monotony"] == 0.0
+
+    # Settimana di sovraccarico piatto (7 giorni identici da 120 TRIMP) -> Monotonia plafonata a 4.0 e ATL sale
+    sim_overload = activity.simulate_future_load(
+        atl_0=45.0,
+        ctl_0=45.0,
+        planned_loads=[120.0] * 7,
+        start_day="2026-10-30",
+    )
+    assert sim_overload["value"]["end_atl_7d"] > 45.0
+    assert sim_overload["value"]["end_tsb_form"] < 0.0
+    assert sim_overload["value"]["simulated_monotony"] == 4.0
+
+

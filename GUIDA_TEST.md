@@ -35,7 +35,7 @@ Chi passa l'argomento `tmp_path` a questa funzione, visto che noi non la chiamia
 Lo fa `pytest` tramite un meccanismo chiamato **fixture** (letteralmente "apparecchiatura di prova", come il banco di misura in laboratorio):
 - `pytest` legge il nome del parametro della funzione (`tmp_path`).
 - Riconosce che `tmp_path` è una fixture integrata.
-- Prima di eseguire il test, crea una **cartella temporanea nuova e vuota** nel sistema operativo (es. `/private/var/folders/.../pytest-of-gabriel/test_init_...0/`) e ne passa il percorso (`Path`) alla funzione.
+- Prima di eseguire il test, crea una **cartella temporanea nuova e vuota** nel sistema operativo (es. `/tmp/pytest-of-user/test_init_...0/`) e ne passa il percorso (`Path`) alla funzione.
 - Così `conn = db.connect(tmp_path / "test.db")` crea un file SQLite usa-e-getta solo per quel singolo test, senza mai toccare il tuo database vero in `data/`.
 
 ---

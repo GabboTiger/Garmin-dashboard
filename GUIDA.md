@@ -18,34 +18,34 @@ flowchart LR
     S5 --> S6["6. Client & Web Flask<br>(app/garmin_client.py & app/web.py)"]
 ```
 
-### Tappa 1: Le fondamenta dei dati — [`app/db.py`](file:///Users/gabriel/Developer/garmin-dashboard/app/db.py)
+### Tappa 1: Le fondamenta dei dati — [`app/db.py`](app/db.py)
 - **Cosa fa**: definisce le tabelle SQLite (`SCHEMA_SQL`) e le funzioni pure di lettura/scrittura (`upsert_raw`, `replace_daily`, `upsert_activity`, `toggle_day_tag`).
 - **Cosa osservare**: nota come usiamo `COALESCE` e `ON CONFLICT` per ottenere l'idempotenza e come i dati mancanti restano rigorosamente `NULL` e mai `0`.
 
-### Tappa 2: L'esperimento Monte Carlo controllato — [`app/synthetic.py`](file:///Users/gabriel/Developer/garmin-dashboard/app/synthetic.py)
+### Tappa 2: L'esperimento Monte Carlo controllato — [`app/synthetic.py`](app/synthetic.py)
 - **Cosa fa**: genera 90 giorni di dati realistici con correlazioni matematiche note inserite apposta (es. una notte breve causa un calo di HRV il giorno dopo, un allenamento duro alza la frequenza cardiaca a riposo).
 - **Cosa osservare**: l'uso di `np.random.default_rng(seed=42)` per generare rumore riproducibile e la sintesi di ipnogrammi e serie al secondo.
 
-### Tappa 3: Il primo approccio ai test — [`tests/test_db.py`](file:///Users/gabriel/Developer/garmin-dashboard/tests/test_db.py) e [`tests/test_synthetic.py`](file:///Users/gabriel/Developer/garmin-dashboard/tests/test_synthetic.py)
+### Tappa 3: Il primo approccio ai test — [`tests/test_db.py`](tests/test_db.py) e [`tests/test_synthetic.py`](tests/test_synthetic.py)
 - **Cosa fa**: verifica l'idempotenza degli inserimenti e controlla che il motore statistico ritrovi le correlazioni note generate nella Tappa 2.
 - **Cosa osservare**: il funzionamento della fixture `tmp_path` e l'uso dell'istruzione `assert`.
 
-### Tappa 4: Il motore algoritmico deterministico — [`app/baselines.py`](file:///Users/gabriel/Developer/garmin-dashboard/app/baselines.py) e [`app/analysis/`](file:///Users/gabriel/Developer/garmin-dashboard/app/analysis/)
+### Tappa 4: Il motore algoritmico deterministico — [`app/baselines.py`](app/baselines.py) e [`app/analysis/`](app/analysis/)
 - **Cosa fa**: tutti i calcoli scientifici senza machine learning:
-  - [`app/baselines.py`](file:///Users/gabriel/Developer/garmin-dashboard/app/baselines.py): Mediana a 30 giorni e dispersione robusta MAD.
-  - [`app/analysis/activity.py`](file:///Users/gabriel/Developer/garmin-dashboard/app/analysis/activity.py): TRIMP esponenziale, modello Banister ATL/CTL/TSB, Foster Monotony/Strain, HRR60/120, Deriva FC.
-  - [`app/analysis/sleep.py`](file:///Users/gabriel/Developer/garmin-dashboard/app/analysis/sleep.py): cicli del sonno, latenze N3/REM, statistica circolare per il ritmo circadiano (SRI, Social Jetlag).
-  - [`app/analysis/recovery_trends.py`](file:///Users/gabriel/Developer/garmin-dashboard/app/analysis/recovery_trends.py): Banda HRV $k\cdot\text{SD}$, Bootstrap IC 95%, Theil-Sen, Mann-Kendall, CUSUM.
+  - [`app/baselines.py`](app/baselines.py): Mediana a 30 giorni e dispersione robusta MAD.
+  - [`app/analysis/activity.py`](app/analysis/activity.py): TRIMP esponenziale, modello Banister ATL/CTL/TSB, Foster Monotony/Strain, HRR60/120, Deriva FC.
+  - [`app/analysis/sleep.py`](app/analysis/sleep.py): cicli del sonno, latenze N3/REM, statistica circolare per il ritmo circadiano (SRI, Social Jetlag).
+  - [`app/analysis/recovery_trends.py`](app/analysis/recovery_trends.py): Banda HRV $k\cdot\text{SD}$, Bootstrap IC 95%, Theil-Sen, Mann-Kendall, CUSUM.
 - **Cosa osservare**: ogni funzione è pura (non tocca database o rete), ha una docstring dettagliata e restituisce `make_result` o `make_not_calculable`.
 
-### Tappa 5: La verifica scientifica — [`tests/test_analysis_activity.py`](file:///Users/gabriel/Developer/garmin-dashboard/tests/test_analysis_activity.py) e [`tests/test_analysis_recovery_trends.py`](file:///Users/gabriel/Developer/garmin-dashboard/tests/test_analysis_recovery_trends.py)
+### Tappa 5: La verifica scientifica — [`tests/test_analysis_activity.py`](tests/test_analysis_activity.py) e [`tests/test_analysis_recovery_trends.py`](tests/test_analysis_recovery_trends.py)
 - **Cosa fa**: collauda ogni formula entro tolleranze numeriche dichiarate e verifica la gestione di casi limite (dati mancanti, stop anticipato dell'orologio, finestre insufficienti).
 
-### Tappa 6: L'integrazione Garmin, il Web e la UI — [`app/sync.py`](file:///Users/gabriel/Developer/garmin-dashboard/app/sync.py), [`app/web.py`](file:///Users/gabriel/Developer/garmin-dashboard/app/web.py), [`static/js/dashboard.js`](file:///Users/gabriel/Developer/garmin-dashboard/static/js/dashboard.js)
+### Tappa 6: L'integrazione Garmin, il Web e la UI — [`app/sync.py`](app/sync.py), [`app/web.py`](app/web.py), [`static/js/dashboard.js`](static/js/dashboard.js)
 - **Cosa fa**:
-  - [`app/sync.py`](file:///Users/gabriel/Developer/garmin-dashboard/app/sync.py): sincronizzazione incrementale con token locali e salvataggio grezzo.
-  - [`app/web.py`](file:///Users/gabriel/Developer/garmin-dashboard/app/web.py): rotte Flask, calcolo su richiesta, API JSON e background thread per il sync.
-  - [`static/js/dashboard.js`](file:///Users/gabriel/Developer/garmin-dashboard/static/js/dashboard.js): grafici Plotly offline, mini-calendario dei giorni disponibili, parser LaTeX artigianale.
+  - [`app/sync.py`](app/sync.py): sincronizzazione incrementale con token locali e salvataggio grezzo.
+  - [`app/web.py`](app/web.py): rotte Flask, calcolo su richiesta, API JSON e background thread per il sync.
+  - [`static/js/dashboard.js`](static/js/dashboard.js): grafici Plotly offline, mini-calendario dei giorni disponibili, parser LaTeX artigianale.
 
 ---
 
@@ -82,7 +82,7 @@ Se scaricassi i dati e li inserissi direttamente nella tabella finale `daily`:
 2. Se volessi aggiungere una metrica (es. la SpO2 minuto per minuto) dovresti riscaricare mesi di dati dai server Garmin, rischiando blocchi di rate limiting o login.
 Con `raw_garmin(day, endpoint, payload_json)`:
 - Il payload JSON originale viene salvato intatto.
-- Puoi riscrivere da zero i parser in [`app/parsers.py`](file:///Users/gabriel/Developer/garmin-dashboard/app/parsers.py) ed eseguire `reparse_all_from_raw()` in 0.5 secondi offline.
+- Puoi riscrivere da zero i parser in [`app/parsers.py`](app/parsers.py) ed eseguire `reparse_all_from_raw()` in 0.5 secondi offline.
 - La chiave primaria composta `(day, endpoint)` garantisce l'**idempotenza**: rilanciare il sync aggiorna la riga senza creare duplicati.
 
 ---
@@ -118,13 +118,13 @@ Se $s_L$ è vicina a zero (carico piatto), la monotonia sale verso il tetto di $
 
 ### D. Statistica Circolare per il Ritmo Circadiano
 Gli orari di addormentamento oscillano attorno alla mezzanotte (es. 23:45 e 00:15). Se facessi la media aritmetica standard tra $23.75$ e $0.25$, otterresti $12.00$ (mezzogiorno!), un errore madornale.
-In [`app/analysis/sleep.py`](file:///Users/gabriel/Developer/garmin-dashboard/app/analysis/sleep.py):
+In [`app/analysis/sleep.py`](app/analysis/sleep.py):
 - Mappiamo gli orari sulla circonferenza goniometrica con angolo $\theta_i = 2\pi \frac{t_i}{24 \cdot 60}$.
 - Calcoliamo le coordinate cartesiane medie $(\bar{C}, \bar{S}) = \left(\frac{1}{N}\sum \cos\theta_i, \, \frac{1}{N}\sum \sin\theta_i\right)$.
 - L'orario medio è $\bar{\theta} = \text{atan2}(\bar{S}, \bar{C})$, e la dispersione angolare dà la deviazione standard circolare corretta.
 
 ### E. Bootstrap Non Parametrico (Effetto Allenamento → Recupero)
-In [`app/analysis/recovery_trends.py`](file:///Users/gabriel/Developer/garmin-dashboard/app/analysis/recovery_trends.py), per calcolare se una seduta dura riduce davvero l'HRV della notte successiva senza assumere che i dati seguano una curva a campana perfetta:
+In [`app/analysis/recovery_trends.py`](app/analysis/recovery_trends.py), per calcolare se una seduta dura riduce davvero l'HRV della notte successiva senza assumere che i dati seguano una curva a campana perfetta:
 1. Calcoliamo la differenza osservata $\Delta = \overline{\text{HRV}}_{\text{dura}} - \overline{\text{HRV}}_{\text{facile}}$.
 2. Eseguiamo $2000$ iterazioni di **ricampionamento con reinserimento** (*Monte Carlo bootstrap*).
 3. Calcoliamo i percentili $2.5\%$ e $97.5\%$ per ottenere l'intervallo di confidenza al $95\%$. Se l'intervallo non attraversa lo zero (es. $[-6.2, -1.8]$ ms), l'effetto è statisticamente significativo.
@@ -164,7 +164,7 @@ def test_init_and_raw_upsert_idempotent(tmp_path: Path) -> None:
 `tmp_path` è una fixture integrata di `pytest`: prima di eseguire la funzione, crea una cartella temporanea nuova nel sistema operativo (`/tmp/...`) e ne passa il percorso (`Path`) alla funzione. A fine test la cartella viene cancellata. In questo modo il tuo database vero in `data/` non viene **mai** toccato dai test.
 
 ### Il *Monkeypatching*: testare senza rete
-In [`tests/test_sync_and_parsers.py`](file:///Users/gabriel/Developer/garmin-dashboard/tests/test_sync_and_parsers.py), non possiamo fare chiamate vere a Garmin nei test.
+In [`tests/test_sync_and_parsers.py`](tests/test_sync_and_parsers.py), non possiamo fare chiamate vere a Garmin nei test.
 Usiamo `monkeypatch`, che consente di sostituire a runtime un metodo vero con uno finto (*mock*):
 ```python
 def fake_fetch_day_bundle(self, day_str, include_extended=True):
@@ -181,9 +181,9 @@ Una domanda tipica di fisica/ingegneria è: *se abbiamo già le risposte reali d
 Ci sono **4 motivi scientifici e ingegneristici fondamentali**:
 1. **Verifica della "Verità a Priori" (*Ground Truth Validation*)**:
    - Nei dati biologici reali, la vera legge fisiologica sottostante è incognita e confusa da mille variabili non controllate (stress, alimentazione, temperatura, rumore del sensore). Se l'algoritmo calcola una correlazione tra carico e calo di HRV pari a $-0.45$, non puoi sapere a priori se il codice è corretto o se contiene un bug matematico.
-   - Con la simulazione Monte Carlo ([`app/synthetic.py`](file:///Users/gabriel/Developer/garmin-dashboard/app/synthetic.py)), **imponiamo noi la legge fisica per costruzione**:
+   - Con la simulazione Monte Carlo ([`app/synthetic.py`](app/synthetic.py)), **imponiamo noi la legge fisica per costruzione**:
      $$\text{HRV}_t = 62 - 0.055 \cdot \text{Carico}_{t-1} + \eta_t, \quad \eta_t \sim \mathcal{N}(0, \sigma^2)$$
-     Il test [`test_synthetic_known_correlations_recovered`](file:///Users/gabriel/Developer/garmin-dashboard/tests/test_synthetic.py) esegue l'algoritmo di analisi e verifica numericamente che esso recuperi esattamente il coefficiente inserito $\beta \in [0.045, 0.065]$. Se fallisce, sappiamo con certezza deterministica che c'è un errore nell'algoritmo.
+     Il test [`test_synthetic_known_correlations_recovered`](tests/test_synthetic.py) esegue l'algoritmo di analisi e verifica numericamente che esso recuperi esattamente il coefficiente inserito $\beta \in [0.045, 0.065]$. Se fallisce, sappiamo con certezza deterministica che c'è un errore nell'algoritmo.
 2. **Stress Testing di Casi Limite e Singolarità (*Edge Cases*)**:
    - Per testare come reagisce la dashboard in caso di febbre acuta (caduta improvvisa di HRV e picco di RHR), settimana di infortunio (zero allenamenti per 14 giorni), notte completamente insonne o perdita di pacchetti del sensore (`NULL`), con i dati reali dovresti aspettare mesi o anni che questi eventi si verifichino. Con Monte Carlo li puoi generare istantaneamente e verificare che il sistema non collassi con divisioni per zero (`ZeroDivisionError`) o matrici singolari.
 3. **Riproducibilità Deterministica nei Test (CI/CD)**:
@@ -196,7 +196,7 @@ Ci sono **4 motivi scientifici e ingegneristici fondamentali**:
    - Permette a chiunque di testare l'intera interfaccia grafica, visualizzare grafici complessi e verificare il design system senza dover inserire credenziali Garmin reali e senza dover esporre i propri dati biometrici personali.
 
 ### Il Test Client di Flask (senza aprire porte di rete)
-In [`tests/test_web.py`](file:///Users/gabriel/Developer/garmin-dashboard/tests/test_web.py):
+In [`tests/test_web.py`](tests/test_web.py):
 ```python
 client = app.test_client()
 response = client.get("/api/activity/100001/timeseries")
@@ -210,8 +210,8 @@ Il `test_client` simula richieste HTTP direttamente in memoria, testando routing
 ## 🎨 4. Frontend Offline e Tipografia Matematica
 
 1. **Nessun CDN esterno**: Plotly è salvato in locale (`static/vendor/plotly.min.js`). La dashboard funziona anche offline e senza connessione internet.
-2. **Motore LaTeX tipografico scritto da zero**: invece di caricare pesanti librerie esterne da 3-4 MB (come MathJax o KaTeX), [`static/js/dashboard.js`](file:///Users/gabriel/Developer/garmin-dashboard/static/js/dashboard.js#L18-L225) include un parser LaTeX ricorsivo di ~150 righe che converte frazioni (`\frac`), radici (`\sqrt`), sommatorie (`\sum`), cappelli (`\hat`), pedici/apici e simboli greci in elementi HTML semantici.
-3. **Design Tokens CSS**: tutti i colori (Recupero `#2DD4BF`, Sforzo `#FB923C`, Sonno `#818CF8`), spaziatura a multipli di 4 px e font di sistema sono dichiarati in [`static/css/tokens.css`](file:///Users/gabriel/Developer/garmin-dashboard/static/css/tokens.css).
+2. **Motore LaTeX tipografico scritto da zero**: invece di caricare pesanti librerie esterne da 3-4 MB (come MathJax o KaTeX), [`static/js/dashboard.js`](static/js/dashboard.js#L18-L225) include un parser LaTeX ricorsivo di ~150 righe che converte frazioni (`\frac`), radici (`\sqrt`), sommatorie (`\sum`), cappelli (`\hat`), pedici/apici e simboli greci in elementi HTML semantici.
+3. **Design Tokens CSS**: tutti i colori (Recupero `#2DD4BF`, Sforzo `#FB923C`, Sonno `#818CF8`), spaziatura a multipli di 4 px e font di sistema sono dichiarati in [`static/css/tokens.css`](static/css/tokens.css).
 
 ---
 

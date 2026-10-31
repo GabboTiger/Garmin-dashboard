@@ -27,3 +27,7 @@ htmlcov/
 # OS
 .DS_Store
 
+# Local notes & agent instructions
+AGENTS.md
+GUIDA_TEST.md
+
